@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 
 # Copyright (c) 2012 Yuri K. Schlesner
 #
@@ -21,7 +21,7 @@
 # SOFTWARE.
 import argparse
 import sys
-from os import path, unlink, walk
+from os import path, walk
 import codecs
 import glob
 import itertools
@@ -34,9 +34,10 @@ PY2 = sys.version_info < (3, 0)
 
 RENPY_REVERTABLE = False
 import renpy.object
+
 try:
-    from renpy.loader import YVANeusEX
-except:
+    from .renpy.loader import  YVANeusEX
+except Exception:
     pass
 from renpy import script
 if(hasattr(script, 'RPYC2_HEADER')):

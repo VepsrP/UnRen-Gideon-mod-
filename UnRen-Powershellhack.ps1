@@ -90,7 +90,7 @@ function decompile {
     $scripts = Get-ChildItem -Path $gamedir -Filter "*.rpyc" -Recurse -Name
     foreach ($script in $scripts)
     {
-        & "$pythondir\python.exe" "$currentdir\unrpyc.py" "-c" "--init-offset" "$script"
+        & "$pythondir\python.exe" "$currentdir\unrpyc.py" "--init-offset" "$script"
         Write-Host ""
     }
 
