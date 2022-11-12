@@ -111,20 +111,17 @@ class PyCode(magic.FakeStrict):
         self.bytecode = None
 
 class RevertableList(magic.FakeStrict, list):
-    if(RENPY_REVERTABLE): __module__ = "renpy.revertable"
-    else: __module__ = "renpy.python"
+    __module__ = "renpy.revertable"
     def __new__(cls):
         return list.__new__(cls)
 
 class RevertableDict(magic.FakeStrict, dict):
-    if(RENPY_REVERTABLE): __module__ = "renpy.revertable"
-    else:__module__ = "renpy.python"
+    __module__ = "renpy.revertable"
     def __new__(cls):
         return dict.__new__(cls)
 
 class RevertableSet(magic.FakeStrict, set):
-    if(RENPY_REVERTABLE): __module__ = "renpy.revertable"
-    else: __module__ = "renpy.python"
+    __module__ = "renpy.revertable"
     def __new__(cls):
         return set.__new__(cls)
 
@@ -210,6 +207,7 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
             return False # Don't stop decompiling if one file already exists
 
     with open(input_filename, 'rb') as in_file:
+        global class_factory
         if try_harder:
             ast = deobfuscate.read_ast(in_file)
         else:
@@ -217,7 +215,15 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
                 ast = read_ast_from_file(in_file)
             else:
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
-                data, ast = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
+                try:
+                    data, ast = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
+                except TypeError as terr:
+                    if('Revertable' in terr.args[0]):
+                        RevertableList.__module__ = "renpy.python"
+                        RevertableDict.__module__ = "renpy.python"
+                        RevertableSet.__module__ = "renpy.python"
+                        class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
+                        data, ast = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
 
     with codecs.open(out_filename, 'w', encoding='utf-8') as out_file:
         if dump:
