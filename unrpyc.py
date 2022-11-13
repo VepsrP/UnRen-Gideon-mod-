@@ -212,7 +212,15 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
             ast = deobfuscate.read_ast(in_file)
         else:
             if (not hasattr(script.Script, "read_rpyc_data") or inspect.ismethod(script.Script.read_rpyc_data)):
-                ast = read_ast_from_file(in_file)
+                try:
+                    ast = read_ast_from_file(in_file)
+                except TypeError as terr:
+                    if('Revertable' in terr.args[0]):
+                        RevertableList.__module__ = "renpy.python"
+                        RevertableDict.__module__ = "renpy.python"
+                        RevertableSet.__module__ = "renpy.python"
+                        class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
+                        data, ast = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})   
             else:
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
                 try:
