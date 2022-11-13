@@ -32,7 +32,6 @@ from operator import itemgetter
 sys.path.append('..')
 PY2 = sys.version_info < (3, 0)
 
-RENPY_REVERTABLE = False
 import renpy.object
 
 try:
@@ -43,11 +42,6 @@ from renpy import script
 if(hasattr(script, 'RPYC2_HEADER')):
     RPYC_Header = script.RPYC2_HEADER
 
-try:
-    from renpy import revertable
-    RENPY_REVERTABLE = True
-except:
-    pass
 try:
     from multiprocessing import Pool, Lock, cpu_count
 except ImportError:
