@@ -17,3 +17,4 @@ decompiler/testcasedecompiler.pyo
 decompiler/translate.pyo
 decompiler/util.pyo
 deobfuscate.pyo
+*.bak

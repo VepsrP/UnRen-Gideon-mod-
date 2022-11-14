@@ -153,7 +153,6 @@ class DecompilerBase(object):
 
     def print_unknown(self, ast):
         # If we encounter a placeholder note, print a warning and insert a placeholder
-        print(dir(ast))
         self.write_failure("Unknown AST node: %s" % str(type(ast)))
 
     def print_node(self, ast):
@@ -183,6 +182,12 @@ def reconstruct_paraminfo(paraminfo):
     rv = ["("]
 
     sep = First("", ", ")
+    if not hasattr(paraminfo, 'parameters'):
+            temp = dict()
+            for key in paraminfo.__dict__.keys():
+                temp[bytes.decode(key)] = paraminfo.__dict__.get(key)
+            for attr in temp:
+                setattr(paraminfo, attr, temp[attr])
     positional = [i for i in paraminfo.parameters if i[0] in paraminfo.positional]
     nameonly = [i for i in paraminfo.parameters if i not in positional]
     for parameter in positional:
