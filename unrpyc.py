@@ -171,13 +171,22 @@ def read_ast_from_file(in_file):
         raw_contents = chunks
 
     if(PY2):
-        try:
-            raw_contents = raw_contents[1].decode('zlib')
-        except:
+        if("YVANeusEX" in globals()):
             raw_contents = YVANeusEX.encrypt(bytearray(raw_contents[1]), YVANeusEX.cipherkey, True) + YVANeusEX.encrypt(bytearray(raw_contents[2]), YVANeusEX.cipherkey, True)
+        else:
+            raw_contents = raw_contents[1].decode('zlib')
     else:
         raw_contents = codecs.decode(raw_contents[1], encoding='zlib')
-    data, stmts = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
+    try:
+        data, stmts = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
+    except TypeError as terr:
+        if('Revertable' in terr.args[0]):
+            RevertableList.__module__ = "renpy.python"
+            RevertableDict.__module__ = "renpy.python"
+            RevertableSet.__module__ = "renpy.python"
+            global class_factory
+            class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
+            data, stmts = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
     return stmts
 
 
@@ -206,15 +215,7 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
             ast = deobfuscate.read_ast(in_file)
         else:
             if (not hasattr(script.Script, "read_rpyc_data") or inspect.ismethod(script.Script.read_rpyc_data)):
-                try:
-                    ast = read_ast_from_file(in_file)
-                except TypeError as terr:
-                    if('Revertable' in terr.args[0]):
-                        RevertableList.__module__ = "renpy.python"
-                        RevertableDict.__module__ = "renpy.python"
-                        RevertableSet.__module__ = "renpy.python"
-                        class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
-                        data, ast = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})   
+                ast = read_ast_from_file(in_file)  
             else:
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
                 try:
