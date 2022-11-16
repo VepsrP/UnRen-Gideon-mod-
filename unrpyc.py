@@ -141,6 +141,21 @@ class set(magic.FakeStrict, object):
 
 class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
 
+def revertable_switch(raw_dat):
+    global class_factory
+    try:
+        data, stmts = magic.safe_loads(raw_dat, class_factory, {
+            "_ast", "collections"})
+    except TypeError as err:
+        if 'Revertable' in err.args[0]:
+            RevertableList.__module__ = "renpy.python"
+            RevertableDict.__module__ = "renpy.python"
+            RevertableSet.__module__ = "renpy.python"
+            class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
+            data, stmts = magic.safe_loads(raw_dat, class_factory, {
+                "_ast", "collections"})
+    return data, stmts
+
 printlock = Lock()
 
 # needs class_factory
@@ -178,15 +193,7 @@ def read_ast_from_file(in_file):
             raw_contents = raw_contents[1].decode('zlib')
     else:
         raw_contents = codecs.decode(raw_contents[1], encoding='zlib')
-    try:
-        data, stmts = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
-    except TypeError as terr:
-        if('Revertable' in terr.args[0]):
-            RevertableList.__module__ = "renpy.python"
-            RevertableDict.__module__ = "renpy.python"
-            RevertableSet.__module__ = "renpy.python"
-            class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
-            data, stmts = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
+    data, stmts = revertable_switch(raw_contents)
     return stmts
 
 
@@ -218,15 +225,7 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
                 ast = read_ast_from_file(in_file)  
             else:
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
-                try:
-                    data, ast = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
-                except TypeError as terr:
-                    if('Revertable' in terr.args[0]):
-                        RevertableList.__module__ = "renpy.python"
-                        RevertableDict.__module__ = "renpy.python"
-                        RevertableSet.__module__ = "renpy.python"
-                        class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
-                        data, ast = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
+                data, ast = revertable_switch(raw_contents)
 
     with codecs.open(out_filename, 'w', encoding='utf-8') as out_file:
         if dump:
