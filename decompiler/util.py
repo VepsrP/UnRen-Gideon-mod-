@@ -182,12 +182,6 @@ def reconstruct_paraminfo(paraminfo):
     rv = ["("]
 
     sep = First("", ", ")
-    if not hasattr(paraminfo, 'parameters'):
-            temp = dict()
-            for key in paraminfo.__dict__.keys():
-                temp[bytes.decode(key)] = paraminfo.__dict__.get(key)
-            for attr in temp:
-                setattr(paraminfo, attr, temp[attr])
     positional = [i for i in paraminfo.parameters if i[0] in paraminfo.positional]
     nameonly = [i for i in paraminfo.parameters if i not in positional]
     for parameter in positional:

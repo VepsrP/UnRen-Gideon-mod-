@@ -57,12 +57,6 @@ class SL2Decompiler(DecompilerBase):
     dispatch = Dispatcher()
 
     def print_node(self, ast):
-        if not hasattr(ast, 'location'):
-            temp = dict()
-            for key in ast.__dict__.keys():
-                temp[bytes.decode(key)] = ast.__dict__.get(key)
-            for attr in temp:
-                setattr(ast, attr, temp[attr])
         self.advance_to_line(ast.location[1])
         self.dispatch.get(type(ast), type(self).print_unknown)(self, ast)
 
@@ -356,12 +350,6 @@ class SL2Decompiler(DecompilerBase):
         children_with_keywords = []
         children_after_keywords = []
         for i in children:
-            if not hasattr(i, 'location'):
-                temp = dict()
-                for key in i.__dict__.keys():
-                    temp[bytes.decode(key)] = i.__dict__.get(key)
-                for attr in temp:
-                    setattr(i, attr, temp[attr])
             if i.location[1] > last_keyword_line:
                 children_after_keywords.append(i)
             else:
