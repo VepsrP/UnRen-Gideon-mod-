@@ -150,6 +150,7 @@ import deobfuscate
 
 def read_ast_from_file(in_file):
     # .rpyc files are just zlib compressed pickles of a tuple of some data and the actual AST of the file
+    global class_factory
     raw_contents = in_file.read()
     if raw_contents[:len(RPYC_Header)] != RPYC_Header:
             if slot != 1:
@@ -184,7 +185,6 @@ def read_ast_from_file(in_file):
             RevertableList.__module__ = "renpy.python"
             RevertableDict.__module__ = "renpy.python"
             RevertableSet.__module__ = "renpy.python"
-            global class_factory
             class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
             data, stmts = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
     return stmts
