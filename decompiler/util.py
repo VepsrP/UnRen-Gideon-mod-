@@ -153,7 +153,6 @@ class DecompilerBase(object):
 
     def print_unknown(self, ast):
         # If we encounter a placeholder note, print a warning and insert a placeholder
-        print(dir(ast))
         self.write_failure("Unknown AST node: %s" % str(type(ast)))
 
     def print_node(self, ast):

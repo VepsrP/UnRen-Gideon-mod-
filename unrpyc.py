@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 
 # Copyright (c) 2012 Yuri K. Schlesner
 #
@@ -21,7 +21,7 @@
 # SOFTWARE.
 import argparse
 import sys
-from os import path, unlink, walk
+from os import path, walk
 import codecs
 import glob
 import itertools
@@ -32,21 +32,16 @@ from operator import itemgetter
 sys.path.append('..')
 PY2 = sys.version_info < (3, 0)
 
-RENPY_REVERTABLE = False
 import renpy.object
+
 try:
-    from renpy.loader import YVANeusEX
-except:
+    from .renpy.loader import  YVANeusEX
+except Exception:
     pass
 from renpy import script
 if(hasattr(script, 'RPYC2_HEADER')):
     RPYC_Header = script.RPYC2_HEADER
 
-try:
-    from renpy import revertable
-    RENPY_REVERTABLE = True
-except:
-    pass
 try:
     from multiprocessing import Pool, Lock, cpu_count
 except ImportError:
@@ -110,20 +105,17 @@ class PyCode(magic.FakeStrict):
         self.bytecode = None
 
 class RevertableList(magic.FakeStrict, list):
-    if(RENPY_REVERTABLE): __module__ = "renpy.revertable"
-    else: __module__ = "renpy.python"
+    __module__ = "renpy.revertable"
     def __new__(cls):
         return list.__new__(cls)
 
 class RevertableDict(magic.FakeStrict, dict):
-    if(RENPY_REVERTABLE): __module__ = "renpy.revertable"
-    else:__module__ = "renpy.python"
+    __module__ = "renpy.revertable"
     def __new__(cls):
         return dict.__new__(cls)
 
 class RevertableSet(magic.FakeStrict, set):
-    if(RENPY_REVERTABLE): __module__ = "renpy.revertable"
-    else: __module__ = "renpy.python"
+    __module__ = "renpy.revertable"
     def __new__(cls):
         return set.__new__(cls)
 
@@ -149,6 +141,21 @@ class set(magic.FakeStrict, object):
 
 class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
 
+def revertable_switch(raw_dat):
+    global class_factory
+    try:
+        data, stmts = magic.safe_loads(raw_dat, class_factory, {
+            "_ast", "collections"})
+    except TypeError as err:
+        if 'Revertable' in err.args[0]:
+            RevertableList.__module__ = "renpy.python"
+            RevertableDict.__module__ = "renpy.python"
+            RevertableSet.__module__ = "renpy.python"
+            class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
+            data, stmts = magic.safe_loads(raw_dat, class_factory, {
+                "_ast", "collections"})
+    return data, stmts
+
 printlock = Lock()
 
 # needs class_factory
@@ -158,6 +165,7 @@ import deobfuscate
 
 def read_ast_from_file(in_file):
     # .rpyc files are just zlib compressed pickles of a tuple of some data and the actual AST of the file
+    global class_factory
     raw_contents = in_file.read()
     if raw_contents[:len(RPYC_Header)] != RPYC_Header:
             if slot != 1:
@@ -179,13 +187,13 @@ def read_ast_from_file(in_file):
         raw_contents = chunks
 
     if(PY2):
-        try:
-            raw_contents = raw_contents[1].decode('zlib')
-        except:
+        if("YVANeusEX" in globals()):
             raw_contents = YVANeusEX.encrypt(bytearray(raw_contents[1]), YVANeusEX.cipherkey, True) + YVANeusEX.encrypt(bytearray(raw_contents[2]), YVANeusEX.cipherkey, True)
+        else:
+            raw_contents = raw_contents[1].decode('zlib')
     else:
         raw_contents = codecs.decode(raw_contents[1], encoding='zlib')
-    data, stmts = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
+    data, stmts = revertable_switch(raw_contents)
     return stmts
 
 
@@ -209,14 +217,15 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
             return False # Don't stop decompiling if one file already exists
 
     with open(input_filename, 'rb') as in_file:
+        global class_factory
         if try_harder:
             ast = deobfuscate.read_ast(in_file)
         else:
             if (not hasattr(script.Script, "read_rpyc_data") or inspect.ismethod(script.Script.read_rpyc_data)):
-                ast = read_ast_from_file(in_file)
+                ast = read_ast_from_file(in_file)  
             else:
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
-                data, ast = magic.safe_loads(raw_contents, class_factory, {"_ast", "collections"})
+                data, ast = revertable_switch(raw_contents)
 
     with codecs.open(out_filename, 'w', encoding='utf-8') as out_file:
         if dump:

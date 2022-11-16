@@ -104,7 +104,7 @@ if exist "game" if exist "renpy" (
 	pause>nul|set/p=.            Press any key to exit...
 	exit
 )
-echo %pythondir%
+
 :menu
 REM --------------------------------------------------------------------------------
 REM Menu selection

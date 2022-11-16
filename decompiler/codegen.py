@@ -796,7 +796,7 @@ class SourceGenerator(NodeVisitor):
     def visit_Str(self, node, frombytes=False):
         self.maybe_break(node)
         if frombytes:
-            newline_count = node.s.count('\n'.encode('bytes'))
+            newline_count = node.s.count('\n'.encode('utf-8'))
         else:
             newline_count = node.s.count('\n')
 

@@ -19,7 +19,6 @@
 # SOFTWARE.
 
 from __future__ import unicode_literals
-from genericpath import exists
 from .util import DecompilerBase, First, WordConcatenator, reconstruct_paraminfo, \
     reconstruct_arginfo, string_escape, split_logical_lines, Dispatcher
 from .util import say_get_code
