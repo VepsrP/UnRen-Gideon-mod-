@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 import sys
 import re
+import traceback
 from io import StringIO
 from contextlib import contextmanager
 
@@ -141,8 +142,10 @@ class DecompilerBase(object):
                     for i in ast.parameters:
                         i = self.convert_ast(i)
                 else: ast.parameters = self.convert_ast(ast.parameters)
-        except Exception:
+        except TypeError:
             pass
+        else:
+            print(traceback.format_exc())
         return ast
 
     @property

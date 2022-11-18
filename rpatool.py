@@ -36,10 +36,10 @@ class RenPyArchive:
         if(isinstance(self.indexes[filename], list)):
             if len(self.indexes[filename][0]) == 3:
                 (offset, length, prefix) = self.indexes[filename][0]
-            elif len(self.indexes[filename][0]) == 4:
-                (offset, length, prefix, temp2) = self.indexes[filename][0]
-            else:
+            elif len(self.indexes[filename][0]) == 2:
                 (offset, length) = self.indexes[filename][0]
+            else:
+                (offset, length, *var) = self.indexes[filename][0]
                 prefix = ''
             if not isinstance(prefix, bytes):
                     prefix = prefix.encode("latin-1")

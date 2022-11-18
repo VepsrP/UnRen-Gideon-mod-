@@ -144,16 +144,16 @@ class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableLis
 def revertable_switch(raw_dat):
     global class_factory
     try:
-        data, stmts = magic.safe_loads(raw_dat, class_factory, {
-            "_ast", "collections"})
+        data, stmts = magic.safe_loads(raw_dat, class_factory, {"_ast", "collections"})
     except TypeError as err:
         if 'Revertable' in err.args[0]:
             RevertableList.__module__ = "renpy.python"
             RevertableDict.__module__ = "renpy.python"
             RevertableSet.__module__ = "renpy.python"
             class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
-            data, stmts = magic.safe_loads(raw_dat, class_factory, {
-                "_ast", "collections"})
+            data, stmts = magic.safe_loads(raw_dat, class_factory, {"_ast", "collections"})
+    else:
+        print(traceback.format_exc())
     return data, stmts
 
 printlock = Lock()
@@ -194,6 +194,7 @@ def read_ast_from_file(in_file):
     else:
         raw_contents = codecs.decode(raw_contents[1], encoding='zlib')
     data, stmts = revertable_switch(raw_contents)
+    print(data)
     return stmts
 
 
@@ -238,12 +239,11 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
     return True
 
 def extract_translations(input_filename, language):
-    global class_script
     with printlock:
         print("Extracting translations from %s..." % input_filename)
 
     with open(input_filename, 'rb') as in_file:
-        ast = class_script.read_ast_from_file(in_file)
+        ast = read_ast_from_file(in_file)
 
     translator = translate.Translator(language, True)
     translator.translate_dialogue(ast)
