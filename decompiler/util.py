@@ -144,7 +144,7 @@ class DecompilerBase(object):
                 else: ast.parameters = self.convert_ast(ast.parameters)
         except TypeError:
             pass
-        else:
+        except Exception:
             print(traceback.format_exc())
         return ast
 
