@@ -126,26 +126,27 @@ class DecompilerBase(object):
             self.index_stack.pop()
     
     def convert_ast(self, ast):
-        try:
-            temp = dict()
-            for key in ast.__dict__.keys():
-                temp[bytes.decode(key)] = ast.__dict__.get(key)
-            for attr in temp:
-                setattr(ast, attr, temp[attr])
-            if hasattr(ast, "children"):
-                if type(ast.children) == list:
-                    for i in ast.children:
-                        i = self.convert_ast(i)
-                else: ast.children = self.convert_ast(ast.children)
-            if hasattr(ast, "parameters"):
-                if type(ast.parameters) == list:
-                    for i in ast.parameters:
-                        i = self.convert_ast(i)
-                else: ast.parameters = self.convert_ast(ast.parameters)
-        except TypeError:
-            pass
-        except Exception:
-            print(traceback.format_exc())
+        if hasattr(ast, "__dict__"):
+            try:
+                temp = dict()
+                for key in ast.__dict__.keys():
+                    temp[bytes.decode(key)] = ast.__dict__.get(key)
+                for attr in temp:
+                    setattr(ast, attr, temp[attr])
+                if hasattr(ast, "children"):
+                    if type(ast.children) == list:
+                        for i in ast.children:
+                            i = self.convert_ast(i)
+                    else: ast.children = self.convert_ast(ast.children)
+                if hasattr(ast, "parameters"):
+                    if type(ast.parameters) == list:
+                        for i in ast.parameters:
+                            i = self.convert_ast(i)
+                    else: ast.parameters = self.convert_ast(ast.parameters)
+            except TypeError:
+                pass
+            except Exception:
+                print(traceback.format_exc())
         return ast
 
     @property
