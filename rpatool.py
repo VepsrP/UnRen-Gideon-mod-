@@ -34,15 +34,13 @@ class RenPyArchive:
     def read(self, filename):
         filename = self.convert_filename(filename)
         if(isinstance(self.indexes[filename], list)):
-            if len(self.indexes[filename][0]) == 3:
-                (offset, length, prefix) = self.indexes[filename][0]
-            elif len(self.indexes[filename][0]) == 2:
-                (offset, length) = self.indexes[filename][0]
-            else:
-                (offset, length, *var) = self.indexes[filename][0]
+            try:
+                (offset, length, prefix) = self.indexes[filename][0][0:3]
+            except Exception:
+                (offset, length) = self.indexes[filename][0][0:2]
                 prefix = ''
             if not isinstance(prefix, bytes):
-                    prefix = prefix.encode("latin-1")
+                prefix = prefix.encode("latin-1")
             self.handle.seek(offset)
             return prefix + self.handle.read(length - len(prefix))
         else: return None
