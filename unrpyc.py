@@ -228,7 +228,7 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
                 data, ast = revertable_switch(raw_contents)
 
-    with codecs.open(out_filename, 'w', encoding='utf-8') as out_file:
+    with codecs.open(out_filename, 'w', encoding='utf-8', buffering=0) as out_file:
         if dump:
             astdump.pprint(out_file, ast, decompile_python=decompile_python, comparable=comparable,
                                           no_pyexpr=no_pyexpr)
