@@ -20,3 +20,6 @@ deobfuscate.pyo
 *.bak
 UnRen-Powershellhack.ps1
 UnRen-ultrahack.bat
+UnRen.sh
+decomp.cab
+unrpyc.zip
