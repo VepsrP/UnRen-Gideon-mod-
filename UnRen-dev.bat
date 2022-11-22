@@ -148,7 +148,7 @@ REM ----------------------------------------------------------------------------
 echo   Searching for RPA packages
 cd "%gamedir%"
 
-for %%f in (*.rpa *.pea *.extra) do (
+for %%f in (*.rpa *.pea *.extra *.jas) do (
 	echo    + Unpacking "%%~nf%%~xf" - %%~zf bytes
 	"%pythondir%python.exe" -O "%rpatool%" "%%f"
 )
