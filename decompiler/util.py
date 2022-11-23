@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 import sys
 import re
+import traceback
 from io import StringIO
 from contextlib import contextmanager
 
@@ -85,7 +86,7 @@ class DecompilerBase(object):
     def advance_to_line(self, linenumber):
         # If there was anything that we wanted to do as soon as we found a blank line,
         # try to do it now.
-        self.blank_line_queue = filter(lambda m: m(linenumber), self.blank_line_queue)
+        self.blank_line_queue = list(filter(lambda m: m(linenumber), self.blank_line_queue))
         if self.linenumber < linenumber:
             # Stop one line short, since the call to indent() will advance the last line.
             # Note that if self.linenumber == linenumber - 1, this will write the empty string.
@@ -118,10 +119,35 @@ class DecompilerBase(object):
 
             for i, node in enumerate(ast):
                 self.index_stack[-1] = i
+                self.convert_ast(node)
                 self.print_node(node)
 
             self.block_stack.pop()
             self.index_stack.pop()
+    
+    def convert_ast(self, ast):
+        if hasattr(ast, "__dict__"):
+            try:
+                temp = dict()
+                for key in ast.__dict__.keys():
+                    temp[bytes.decode(key)] = ast.__dict__.get(key)
+                for attr in temp:
+                    setattr(ast, attr, temp[attr])
+                if hasattr(ast, "children"):
+                    if type(ast.children) == list:
+                        for i in ast.children:
+                            i = self.convert_ast(i)
+                    else: ast.children = self.convert_ast(ast.children)
+                if hasattr(ast, "parameters"):
+                    if type(ast.parameters) == list:
+                        for i in ast.parameters:
+                            i = self.convert_ast(i)
+                    else: ast.parameters = self.convert_ast(ast.parameters)
+            except TypeError:
+                pass
+            except Exception:
+                print(traceback.format_exc())
+        return ast
 
     @property
     def block(self):
@@ -153,7 +179,6 @@ class DecompilerBase(object):
 
     def print_unknown(self, ast):
         # If we encounter a placeholder note, print a warning and insert a placeholder
-        print(dir(ast))
         self.write_failure("Unknown AST node: %s" % str(type(ast)))
 
     def print_node(self, ast):

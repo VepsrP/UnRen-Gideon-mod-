@@ -17,4 +17,9 @@ decompiler/testcasedecompiler.pyo
 decompiler/translate.pyo
 decompiler/util.pyo
 deobfuscate.pyo
+*.bak
+UnRen-Powershellhack.ps1
+UnRen-ultrahack.bat
 UnRen.sh
+decomp.cab
+unrpyc.zipUnRen.sh
