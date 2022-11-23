@@ -22,8 +22,8 @@
 import argparse
 import sys
 from os import path, walk
-import codecs
 import glob
+import codecs
 import itertools
 import traceback
 import struct
@@ -193,7 +193,7 @@ def read_ast_from_file(in_file):
         else:
             raw_contents = raw_contents[1].decode('zlib')
     else:
-        raw_contents = codecs.decode(raw_contents[1], encoding='zlib')
+        raw_contents = codecs.decode(raw_contents, encoding="zlib")
     data, stmts = revertable_switch(raw_contents)
     return stmts
 
@@ -228,14 +228,15 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
                 data, ast = revertable_switch(raw_contents)
 
-    with codecs.open(out_filename, 'w', encoding='utf-8', buffering=0) as out_file:
+    with codecs.open(out_filename, 'w', encoding='utf-8') as out_file:
         if dump:
             astdump.pprint(out_file, ast, decompile_python=decompile_python, comparable=comparable,
-                                          no_pyexpr=no_pyexpr)
+                                        no_pyexpr=no_pyexpr)
         else:
             decompiler.pprint(out_file, ast, decompile_python=decompile_python, printlock=printlock,
-                                             translator=translator, tag_outside_block=tag_outside_block,
-                                             init_offset=init_offset)
+                                            translator=translator, tag_outside_block=tag_outside_block,
+                                            init_offset=init_offset)
+
     return True
 
 def extract_translations(input_filename, language):
@@ -269,10 +270,6 @@ def worker(t):
             print("Error while decompiling %s:" % filename)
             print(traceback.format_exc())
         return False
-
-def sharelock(lock):
-    global printlock
-    printlock = lock
 
 def main():
     # python27 unrpyc.py [-c] [-d] [--python-screens|--ast-screens|--no-screens] file [file ...]
