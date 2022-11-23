@@ -86,7 +86,7 @@ class DecompilerBase(object):
     def advance_to_line(self, linenumber):
         # If there was anything that we wanted to do as soon as we found a blank line,
         # try to do it now.
-        self.blank_line_queue.append(filter(lambda m: m(linenumber), self.blank_line_queue))
+        self.blank_line_queue = list(filter(lambda m: m(linenumber), self.blank_line_queue))
         if self.linenumber < linenumber:
             # Stop one line short, since the call to indent() will advance the last line.
             # Note that if self.linenumber == linenumber - 1, this will write the empty string.

@@ -23,12 +23,12 @@ import argparse
 import sys
 from os import path, walk
 import glob
+import codecs
 import itertools
 import traceback
 import struct
 import inspect
 from operator import itemgetter
-import zlib
 sys.path.append('..')
 PY2 = sys.version_info < (3, 0)
 
@@ -193,7 +193,7 @@ def read_ast_from_file(in_file):
         else:
             raw_contents = raw_contents[1].decode('zlib')
     else:
-        raw_contents = zlib.decompress(raw_contents)
+        raw_contents = codecs.decode(raw_contents, encoding="zlib")
     data, stmts = revertable_switch(raw_contents)
     return stmts
 
@@ -228,7 +228,7 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
                 data, ast = revertable_switch(raw_contents)
 
-    with open(out_filename, 'w', encoding='utf-8') as out_file:
+    with codecs.open(out_filename, 'w', encoding='utf-8') as out_file:
         if dump:
             astdump.pprint(out_file, ast, decompile_python=decompile_python, comparable=comparable,
                                         no_pyexpr=no_pyexpr)
