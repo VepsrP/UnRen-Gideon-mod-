@@ -124,7 +124,7 @@ class DecompilerBase(object):
 
             self.block_stack.pop()
             self.index_stack.pop()
-    
+
     def convert_ast(self, ast):
         if hasattr(ast, "__dict__"):
             try:
@@ -265,26 +265,10 @@ def string_escape(s): # TODO see if this needs to work like encode_say_string el
     return s
 
 # keywords used by ren'py's parser
-KEYWORDS = set(['$', 'as', 'at',
-    'behind',
-    'call',
-    'expression',
-    'hide',
-    'if',
-    'in',
-    'image',
-    'init',
-    'jump',
-    'menu',
-    'onlayer',
-    'python',
-    'return',
-    'scene',
-    'show',
-    'with',
-    'while',
-    'zorder',
-    'transform',])
+KEYWORDS = set(['$', 'as', 'at', 'behind', 'call', 'expression', 'hide',
+                'if', 'in', 'image', 'init', 'jump', 'menu', 'onlayer',
+                'python', 'return', 'scene', 'set', 'show', 'with',
+                'while', 'zorder', 'transform', 'RPY'])
 
 word_regexp = '[a-zA-Z_\u00a0-\ufffd][0-9a-zA-Z_\u00a0-\ufffd]*'
 

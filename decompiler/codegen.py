@@ -35,14 +35,18 @@
     :license: BSD.
 """
 
+
+# replacement works so far but needs longer tests
+# from ast import *
+import ast
+
 import sys
 PY3 = sys.version_info >= (3, 0)
 # These might not exist, so we put them equal to NoneType
-Try = TryExcept = TryFinally = YieldFrom = MatMult = Await = type(None)
+ast.Try = TryExcept = TryFinally = ast.YieldFrom = ast.MatMult = ast.Await = type(
+    None)
 
-from ast import *
-
-class Sep(object):
+class Sep:
     # Performs the common pattern of returning a different symbol the first
     # time the object is called
     def __init__(self, last, first=''):
@@ -82,7 +86,7 @@ def to_source(node, indent_with=' ' * 4, add_line_information=False, correct_lin
         return SourceGenerator(indent_with, add_line_information).process(node)
 
 
-class SourceGenerator(NodeVisitor):
+class SourceGenerator(ast.NodeVisitor):
     """This visitor is able to transform a well formed syntax tree into python
     sourcecode.  For more details have a look at the docstring of the
     `node_to_source` function.
@@ -95,48 +99,48 @@ class SourceGenerator(NodeVisitor):
     ARROW = ' -> '
 
     BOOLOP_SYMBOLS = {
-        And:        (' and ', 5),
-        Or:         (' or ',  4)
+        ast.And:        (' and ', 5),  # noqa
+        ast.Or:         (' or ',  4)  # noqa
     }
 
     BINOP_SYMBOLS = {
-        Add:        (' + ',  12),
-        Sub:        (' - ',  12),
-        Mult:       (' * ',  13),
-        MatMult:    (' @ ',  13),
-        Div:        (' / ',  13),
-        FloorDiv:   (' // ', 13),
-        Mod:        (' % ',  13),
-        Pow:        (' ** ', 15),
-        LShift:     (' << ', 11),
-        RShift:     (' >> ', 11),
-        BitOr:      (' | ',  8),
-        BitAnd:     (' & ',  10),
-        BitXor:     (' ^ ',  9)
+        ast.Add:        (' + ',  12),  # noqa
+        ast.Sub:        (' - ',  12),  # noqa
+        ast.Mult:       (' * ',  13),  # noqa
+        ast.MatMult:    (' @ ',  13),  # noqa
+        ast.Div:        (' / ',  13),  # noqa
+        ast.FloorDiv:   (' // ', 13),  # noqa
+        ast.Mod:        (' % ',  13),  # noqa
+        ast.Pow:        (' ** ', 15),  # noqa
+        ast.LShift:     (' << ', 11),  # noqa
+        ast.RShift:     (' >> ', 11),  # noqa
+        ast.BitOr:      (' | ',   8),  # noqa
+        ast.BitAnd:     (' & ',  10),  # noqa
+        ast.BitXor:     (' ^ ',   9)  # noqa
     }
 
     CMPOP_SYMBOLS = {
-        Eq:         (' == ',     7),
-        Gt:         (' > ',      7),
-        GtE:        (' >= ',     7),
-        In:         (' in ',     7),
-        Is:         (' is ',     7),
-        IsNot:      (' is not ', 7),
-        Lt:         (' < ',      7),
-        LtE:        (' <= ',     7),
-        NotEq:      (' != ',     7),
-        NotIn:      (' not in ', 7)
+        ast.Eq:         (' == ',     7),  # noqa
+        ast.Gt:         (' > ',      7),  # noqa
+        ast.GtE:        (' >= ',     7),  # noqa
+        ast.In:         (' in ',     7),  # noqa
+        ast.Is:         (' is ',     7),  # noqa
+        ast.IsNot:      (' is not ', 7),  # noqa
+        ast.Lt:         (' < ',      7),  # noqa
+        ast.LtE:        (' <= ',     7),  # noqa
+        ast.NotEq:      (' != ',     7),  # noqa
+        ast.NotIn:      (' not in ', 7)  # noqa
     }
 
     UNARYOP_SYMBOLS = {
-        Invert:     ('~',    14),
-        Not:        ('not ', 6),
-        UAdd:       ('+',    14),
-        USub:       ('-',    14)
+        ast.Invert:     ('~',    14),  # noqa
+        ast.Not:        ('not ',  6),  # noqa
+        ast.UAdd:       ('+',    14),  # noqa
+        ast.USub:       ('-',    14)  # noqa
     }
 
-    BLOCK_NODES = (If, For, While, With, Try, TryExcept, TryFinally,
-                   FunctionDef, ClassDef)
+    BLOCK_NODES = (ast.If, ast.For, ast.While, ast.With, ast.Try, TryExcept, TryFinally,
+                   ast.FunctionDef, ast.ClassDef)
 
     def __init__(self, indent_with, add_line_information=False, correct_line_numbers=False, line_number=1):
         self.result = []
@@ -180,7 +184,7 @@ class SourceGenerator(NodeVisitor):
         if value < self.precedence_stack[-1][0]:
             self.write('(')
             self.can_newline = True
-        if ltr == False:
+        if ltr is False:
             value += 1
         self.precedence_stack.append([value, newline, ltr])
 
@@ -220,13 +224,14 @@ class SourceGenerator(NodeVisitor):
         # If this is the case, we have to handle them properly
         if self.correct_line_numbers:
             if not self.indented:
-                self.new_lines = max(self.new_lines, 1 if self.force_newline else 0)
+                self.new_lines = max(
+                    self.new_lines, 1 if self.force_newline else 0)
                 self.force_newline = False
 
                 if self.new_lines:
                     # we have new lines to print
                     if self.after_colon == 2:
-                        self.result.append(';'+'\\\n' * self.new_lines)
+                        self.result.append(';' + '\\\n' * self.new_lines)
                     else:
                         self.after_colon = 0
                         self.result.append('\n' * self.new_lines)
@@ -312,15 +317,15 @@ class SourceGenerator(NodeVisitor):
 
     def visit_bare(self, node):
         # this node is allowed to be a bare tuple
-        if isinstance(node, Tuple):
+        if isinstance(node, ast.Tuple):
             self.visit_Tuple(node, False)
         else:
             self.visit(node)
 
     def visit_bareyield(self, node):
-        if isinstance(node, Yield):
+        if isinstance(node, ast.Yield):
             self.visit_Yield(node, False)
-        elif isinstance(node, YieldFrom):
+        elif isinstance(node, ast.YieldFrom):
             self.visit_YieldFrom(node, False)
         else:
             self.visit_bare(node)
@@ -544,7 +549,7 @@ class SourceGenerator(NodeVisitor):
         self.write(':')
         self.body(node.body)
         while True:
-            if len(node.orelse) == 1 and isinstance(node.orelse[0], If):
+            if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
                 node = node.orelse[0]
                 self.newline(node.test, force=True)
                 self.write('elif ')
@@ -597,7 +602,7 @@ class SourceGenerator(NodeVisitor):
             # in python 2, similarly to the elif statement, multiple nested context managers
             # are generally the multi-form of a single with statement
             self.visit_withitem(node)
-            while len(node.body) == 1 and isinstance(node.body[0], With):
+            while len(node.body) == 1 and isinstance(node.body[0], ast.With):
                 node = node.body[0]
                 self.write(self.COMMA)
                 self.visit_withitem(node)
@@ -677,7 +682,7 @@ class SourceGenerator(NodeVisitor):
             if node.name:
                 self.write(' as ')
                 # Compatability
-                if isinstance(node.name, AST):
+                if isinstance(node.name, ast.AST):
                     self.visit(node.name)
                 else:
                     self.write(node.name)
@@ -735,7 +740,7 @@ class SourceGenerator(NodeVisitor):
         self.maybe_break(node)
         # Edge case: due to the use of \d*[.]\d* for floats \d*[.]\w*, you have
         # to put parenthesis around an integer literal do get an attribute from it
-        if isinstance(node.value, Num):
+        if isinstance(node.value, ast.Num):
             self.paren_start()
             self.visit(node.value)
             self.paren_end()
@@ -747,8 +752,8 @@ class SourceGenerator(NodeVisitor):
 
     def visit_Call(self, node):
         self.maybe_break(node)
-        #need to put parenthesis around numbers being called (this makes no sense)
-        if isinstance(node.func, Num):
+        # need to put parenthesis around numbers being called (this makes no sense)
+        if isinstance(node.func, ast.Num):
             self.paren_start()
             self.visit_Num(node.func)
             self.paren_end()
@@ -757,9 +762,9 @@ class SourceGenerator(NodeVisitor):
             self.visit(node.func)
             self.prec_end()
         # special case generator expressions as only argument
-        if (len(node.args) == 1 and isinstance(node.args[0], GeneratorExp) and
-                not node.keywords and hasattr(node, 'starargs') and 
-                not node.starargs and not node.kwargs):
+        if (len(node.args) == 1 and isinstance(node.args[0], ast.GeneratorExp)
+            and not node.keywords and hasattr(node, 'starargs')
+                and not node.starargs and not node.kwargs):
             self.visit_GeneratorExp(node.args[0])
             return
 
@@ -841,10 +846,10 @@ class SourceGenerator(NodeVisitor):
 
     def visit_Num(self, node):
         self.maybe_break(node)
-
-        negative = (node.n.imag or node.n.real) < 0 and not PY3
-        if negative:
-            self.prec_start(self.UNARYOP_SYMBOLS[USub][1])
+        # PY2 code uneeded, must be tested some time
+        # negative = (node.n.imag or node.n.real) < 0 and not PY3
+        # if negative:
+        #     self.prec_start(self.UNARYOP_SYMBOLS[ast.USub][1])
 
         # 1e999 and related friends are parsed into inf
         if abs(node.n) == 1e999:
@@ -902,7 +907,7 @@ class SourceGenerator(NodeVisitor):
         self.prec_start(precedence, type(node.op) != Pow)
 
         # work around python's negative integer literal optimization
-        if isinstance(node.op, Pow):
+        if isinstance(node.op, ast.Pow):
             self.visit(node.left)
             self.prec_middle(14)
         else:
@@ -940,7 +945,7 @@ class SourceGenerator(NodeVisitor):
         self.write(symbol)
         # workaround: in python 2, an explicit USub node around a number literal
         # indicates the literal was surrounded by parenthesis
-        if (not PY3 and isinstance(node.op, USub) and isinstance(node.operand, Num) 
+        if (not PY3 and isinstance(node.op, USub) and isinstance(node.operand, Num)
                 and (node.operand.n.real or node.operand.n.imag) >= 0):
             self.paren_start()
             self.visit(node.operand)
@@ -952,7 +957,7 @@ class SourceGenerator(NodeVisitor):
     def visit_Subscript(self, node):
         self.maybe_break(node)
         # have to surround literals by parenthesis (at least in Py2)
-        if isinstance(node.value, Num):
+        if isinstance(node.value, ast.Num):
             self.paren_start()
             self.visit_Num(node.value)
             self.paren_end()
@@ -981,7 +986,7 @@ class SourceGenerator(NodeVisitor):
             self.visit(node.upper)
         if node.step is not None:
             self.write(':')
-            if not (isinstance(node.step, Name) and node.step.id == 'None'):
+            if not (isinstance(node.step, ast.Name) and node.step.id == 'None'):
                 self.visit(node.step)
 
     def visit_Ellipsis(self, node):
@@ -993,7 +998,7 @@ class SourceGenerator(NodeVisitor):
         for idx, item in enumerate(node.dims):
             if idx:
                 self.write(self.COMMA)
-            if isinstance(item, Index):
+            if isinstance(item, ast.Index):
                 self.visit_Index(item, True)
             else:
                 self.visit(item)
@@ -1013,8 +1018,8 @@ class SourceGenerator(NodeVisitor):
 
     def visit_YieldFrom(self, node, paren=True):
         # Even though yield and yield from technically occupy precedence level 1, certain code
-        # using them is illegal e.g. "return yield from a()" will not work unless you 
-        # put the yield from statement within parenthesis. 
+        # using them is illegal e.g. "return yield from a()" will not work unless you
+        # put the yield from statement within parenthesis.
         self.maybe_break(node)
         if paren:
             self.paren_start()

@@ -220,7 +220,7 @@ class SLDecompiler(DecompilerBase):
         with self.increase_indent():
             for i in stuff_to_print:
                 # Nodes are lists. Keywords are ready-to-print strings.
-                if type(i[1]) == list:
+                if isinstance(i[1], list):
                     self.print_node(i[1][0], i[1][1:])
                 else:
                     self.advance_to_line(i[0])
@@ -392,25 +392,26 @@ class SLDecompiler(DecompilerBase):
                 self.write_lines(lines)
 
     def is_renpy_if(self, nodes):
-        return len(nodes) == 1 and isinstance(nodes[0], ast.If) and (
-            nodes[0].body and self.parse_header(nodes[0].body[0])) and (
-                not nodes[0].orelse or self.is_renpy_if(nodes[0].orelse) or
-                self.parse_header(nodes[0].orelse[0]))
+        return (len(nodes) == 1 and isinstance(nodes[0], ast.If)
+                and (nodes[0].body and self.parse_header(nodes[0].body[0]))
+                and (not nodes[0].orelse or self.is_renpy_if(nodes[0].orelse)
+                     or self.parse_header(nodes[0].orelse[0])))
 
     def is_renpy_for(self, nodes):
-        return (len(nodes) == 2 and isinstance(nodes[0], ast.Assign) and
-            len(nodes[0].targets) == 1 and
-            isinstance(nodes[0].targets[0], ast.Name) and
-            re.match(r"_[0-9]+$", nodes[0].targets[0].id) and
-            isinstance(nodes[0].value, ast.Num) and nodes[0].value.n == 0 and
-            isinstance(nodes[1], ast.For) and not nodes[1].orelse and
-            nodes[1].body and self.parse_header(nodes[1].body[0]) and
-            isinstance(nodes[1].body[-1], ast.AugAssign) and
-            isinstance(nodes[1].body[-1].op, ast.Add) and
-            isinstance(nodes[1].body[-1].target, ast.Name) and
-            re.match(r"_[0-9]+$", nodes[1].body[-1].target.id) and
-            isinstance(nodes[1].body[-1].value, ast.Num) and
-            nodes[1].body[-1].value.n == 1)
+        return (len(nodes) == 2 and isinstance(nodes[0], ast.Assign)
+                and len(nodes[0].targets) == 1
+                and isinstance(nodes[0].targets[0], ast.Name)
+                and re.match(r"_[0-9]+$", nodes[0].targets[0].id)
+                and isinstance(nodes[0].value, ast.Num)
+                and nodes[0].value.n == 0 and isinstance(nodes[1], ast.For)
+                and not nodes[1].orelse and nodes[1].body
+                and self.parse_header(nodes[1].body[0])
+                and isinstance(nodes[1].body[-1], ast.AugAssign)
+                and isinstance(nodes[1].body[-1].op, ast.Add)
+                and isinstance(nodes[1].body[-1].target, ast.Name)
+                and re.match(r"_[0-9]+$", nodes[1].body[-1].target.id)
+                and isinstance(nodes[1].body[-1].value, ast.Num)
+                and nodes[1].body[-1].value.n == 1)
 
     def strip_parens(self, text):
         if text and text[0] == '(' and text[-1] == ')':
@@ -596,7 +597,7 @@ class SLDecompiler(DecompilerBase):
                         self.write("has ")
                     self.skip_indent_until_write = True
                     self.print_nodes(block, 1, True)
-            except BadHasBlockException as e:
+            except BadHasBlockException:
                 self.rollback_state(state)
                 self.print_python(header, code)
             else:

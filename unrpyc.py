@@ -149,12 +149,13 @@ def revertable_switch(raw_dat):
     global class_factory
     try:
         data, stmts = magic.safe_loads(raw_dat, class_factory2, {"_ast", "collections"})
-        
+
     except TypeError as err:
         if 'Revertable' in err.args[0]:
             data, stmts = magic.safe_loads(raw_dat, class_factory3, {"_ast", "collections"})
     except Exception:
-        print(traceback.format_exc())
+        with printlock:
+            print(traceback.format_exc())
     return data, stmts
 
 printlock = Lock()
@@ -223,7 +224,7 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
             ast = deobfuscate.read_ast(in_file)
         else:
             if (not hasattr(script.Script, "read_rpyc_data") or inspect.ismethod(script.Script.read_rpyc_data)):
-                ast = read_ast_from_file(in_file)  
+                ast = read_ast_from_file(in_file)
             else:
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
                 data, ast = revertable_switch(raw_contents)
