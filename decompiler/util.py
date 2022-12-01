@@ -167,7 +167,7 @@ class DecompilerBase(object):
         if self.printlock:
             self.printlock.acquire()
         try:
-            print(message)
+            print(message.encode('utf-8'))
         finally:
             if self.printlock:
                 self.printlock.release()

@@ -121,7 +121,7 @@ class Decompiler(DecompilerBase):
             self.set_best_init_offset(ast)
 
         # skip_indent_until_write avoids an initial blank line
-        super(Decompiler, self).dump(ast, indent_level, skip_indent_until_write=True)
+        super(Decompiler, self).dump(ast, indent_level, skip_indent_until_write=False)
         # if there's anything we wanted to write out but didn't yet, do it now
         for m in self.blank_line_queue:
             m(None)

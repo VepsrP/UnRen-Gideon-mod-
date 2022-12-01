@@ -150,7 +150,7 @@ def revertable_switch(raw_dat):
     try:
         data, stmts = magic.safe_loads(raw_dat, class_factory2, {"_ast", "collections"})
 
-    except TypeError as err:
+    except (TypeError, AttributeError) as err:
         if 'Revertable' in err.args[0]:
             data, stmts = magic.safe_loads(raw_dat, class_factory3, {"_ast", "collections"})
     except Exception:

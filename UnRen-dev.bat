@@ -175,21 +175,40 @@ cd "%gamedir%"
 REM set "PYTHONPATH=%~dp0%"
 for /r %%f in (*.rpyc) do (
 	if not %%~nf == un (
-		if "%option%" == "2" (
-			echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-			 "%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%%f"
-		)
-		if "%option%" == "9" (
-			echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-			 "%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%%f"
-		)
-		if "%option%" == "8" (
-			echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-			 "%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%%f"
-		)
-		if "%option%" == "7" (
-			echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-			 "%pythondir%python.exe" "%unrpycpy%" -c --init-offset --try-harder "%%f"
+		if exist "%pythondir%Lib" (
+			if "%option%" == "2" (
+				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
+				"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset "%%f"
+			)
+			if "%option%" == "9" (
+				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
+				"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset "%%f"
+			)
+			if "%option%" == "8" (
+				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
+				"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset "%%f"
+			)
+			if "%option%" == "7" (
+				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
+				"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset --try-harder "%%f"
+			)
+		) else (
+			if "%option%" == "2" (
+				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
+				"%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%%f"
+			)
+			if "%option%" == "9" (
+				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
+				"%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%%f"
+			)
+			if "%option%" == "8" (
+				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
+				"%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%%f"
+			)
+			if "%option%" == "7" (
+				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
+				"%pythondir%python.exe" "%unrpycpy%" -c --init-offset --try-harder "%%f"
+			)
 		)
 	)
 )
