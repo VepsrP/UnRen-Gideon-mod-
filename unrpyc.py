@@ -338,7 +338,7 @@ def main():
         if not retval:
             print("File not found: " + s)
         return retval
-    filesAndDirs = map(glob_or_complain, args.file)
+    filesAndDirs = list(map(glob_or_complain, args.file))
     # Concatenate lists
     filesAndDirs = list(itertools.chain(*filesAndDirs))
 
@@ -357,10 +357,10 @@ def main():
         print("No script files to decompile.")
         return
 
-    files = map(lambda x: (args, x, path.getsize(x)), files)
+    files = list(map(lambda x: (args, x, path.getsize(x)), files))
 
     # Decompile in the order Ren'Py loads in
-    files = sorted(files, key=itemgetter(1), reverse=True)
+    files = list(sorted(files, key=itemgetter(1), reverse=True))
     results = list(map(worker, files))
 
     if args.write_translation_file:
