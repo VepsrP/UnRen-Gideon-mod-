@@ -149,12 +149,13 @@ def revertable_switch(raw_dat):
     global class_factory
     try:
         data, stmts = magic.safe_loads(raw_dat, class_factory2, {"_ast", "collections"})
-        
-    except TypeError as err:
+
+    except (TypeError, AttributeError) as err:
         if 'Revertable' in err.args[0]:
             data, stmts = magic.safe_loads(raw_dat, class_factory3, {"_ast", "collections"})
     except Exception:
-        print(traceback.format_exc())
+        with printlock:
+            print(traceback.format_exc())
     return data, stmts
 
 printlock = Lock()
@@ -223,7 +224,7 @@ def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python
             ast = deobfuscate.read_ast(in_file)
         else:
             if (not hasattr(script.Script, "read_rpyc_data") or inspect.ismethod(script.Script.read_rpyc_data)):
-                ast = read_ast_from_file(in_file)  
+                ast = read_ast_from_file(in_file)
             else:
                 raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
                 data, ast = revertable_switch(raw_contents)
@@ -337,7 +338,7 @@ def main():
         if not retval:
             print("File not found: " + s)
         return retval
-    filesAndDirs = map(glob_or_complain, args.file)
+    filesAndDirs = list(map(glob_or_complain, args.file))
     # Concatenate lists
     filesAndDirs = list(itertools.chain(*filesAndDirs))
 
@@ -356,10 +357,10 @@ def main():
         print("No script files to decompile.")
         return
 
-    files = map(lambda x: (args, x, path.getsize(x)), files)
+    files = list(map(lambda x: (args, x, path.getsize(x)), files))
 
     # Decompile in the order Ren'Py loads in
-    files = sorted(files, key=itemgetter(1), reverse=True)
+    files = list(sorted(files, key=itemgetter(1), reverse=True))
     results = list(map(worker, files))
 
     if args.write_translation_file:

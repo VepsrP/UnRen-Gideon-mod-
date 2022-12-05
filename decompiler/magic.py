@@ -367,7 +367,7 @@ class FakePackage(FakeModule):
         if mod is None:
             try:
                 __import__(modname)
-            except:
+            except ImportError:
                 mod = FakePackage(modname)
             else:
                 mod = sys.modules[modname]

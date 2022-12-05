@@ -937,6 +937,7 @@ class Decompiler(DecompilerBase):
 
         elif isinstance(screen, renpy.sl2.slast.SLScreen):
             def print_atl_callback(linenumber, indent_level, atl):
+                self.skip_indent_until_write = False
                 old_linenumber = self.linenumber
                 self.linenumber = linenumber
                 with self.increase_indent(indent_level - self.indent_level):

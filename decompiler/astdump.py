@@ -26,6 +26,8 @@ from . import codegen
 import ast as py_ast
 import renpy
 
+PY2 = sys.version_info < (3, 0)
+
 def pprint(out_file, ast, decompile_python=False, comparable=False, no_pyexpr=False):
     # The main function of this module, a wrapper which sets
     # the config and creates the AstDumper instance
@@ -41,7 +43,7 @@ class AstDumper(object):
     MAP_CLOSE = {list: ']', tuple: ')', set: '}', frozenset: '})'}
 
     def __init__(self, out_file=None, decompile_python=False, no_pyexpr=False,
-                 comparable=False, indentation=u'    '):
+                 comparable=False, indentation='    '):
         self.indentation = indentation
         self.out_file = out_file or sys.stdout
         self.decompile_python = decompile_python
@@ -57,11 +59,8 @@ class AstDumper(object):
 
     def print_ast(self, ast):
         # Decides which function should be used to print the given ast object.
-        try:
+        if ast in self.passed:
             i = self.passed.index(ast)
-        except ValueError:
-            pass
-        else:
             self.p('<circular reference to object on line %d>' % self.passed_where[i])
             return
         self.passed.append(ast)
@@ -72,9 +71,9 @@ class AstDumper(object):
             self.print_pyexpr(ast)
         elif isinstance(ast, dict):
             self.print_dict(ast)
-        elif isinstance(ast, (str, str)):
+        elif  (not PY2 and isinstance(ast, str)) or (PY2 and isinstance(ast, unicode)):
             self.print_string(ast)
-        elif isinstance(ast, (int, int, bool)) or ast is None:
+        elif isinstance(ast, (int, bool)) or ast is None:
             self.print_other(ast)
         elif inspect.isclass(ast):
             self.print_class(ast)
@@ -110,7 +109,7 @@ class AstDumper(object):
 
     def print_dict(self, ast):
         # handles the printing of dictionaries
-        if type(ast) != dict:
+        if not isinstance(ast, dict):
             self.p(repr(type(ast)))
 
         self.p('{')
@@ -135,19 +134,19 @@ class AstDumper(object):
             ast.serial = 0
         elif key == 'col_offset':
             ast.col_offset = 0 # TODO maybe make this match?
-        elif key == 'name' and type(ast.name) == tuple:
+        elif key == 'name' and isinstance(ast.name, tuple):
             name = ast.name[0]
             if isinstance(name, str):
                 name = name.encode('bytes')
             ast.name = (name.split('/')[-1], 0, 0)
-        elif key == 'location' and type(ast.location) == tuple:
+        elif key == 'location' and isinstance(ast.location, tuple):
             if len(ast.location) == 4:
                 ast.location = (ast.location[0].split('/')[-1].split('\\')[-1], ast.location[1], ast.location[2], 0)
             elif len(ast.location) == 3:
                 ast.location = (ast.location[0].split('/')[-1].split('\\')[-1], ast.location[1], 0)
             elif len(ast.location) == 2:
                 ast.location = (ast.location[0].split('/')[-1].split('\\')[-1], ast.location[1])
-        elif key == 'loc' and type(ast.loc) == tuple:
+        elif key == 'loc' and isinstance(ast.loc, tuple):
             ast.loc = (ast.loc[0].split('/')[-1].split('\\')[-1], ast.loc[1])
         elif key == 'filename':
             ast.filename = ast.filename.split('/')[-1].split('\\')[-1]
@@ -274,7 +273,7 @@ class AstDumper(object):
         # shouldn't indent in case there's only one or zero objects in this object to print
         if ast is None or len(ast) > 1:
             self.indent += diff_indent
-            self.p(u'\n' + self.indentation * self.indent)
+            self.p('\n' + self.indentation * self.indent)
 
     def p(self, string):
         # write the string to the stream
