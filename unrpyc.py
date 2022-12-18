@@ -35,7 +35,7 @@ PY2 = sys.version_info < (3, 0)
 import renpy.object
 
 try:
-    from .renpy.loader import  YVANeusEX
+    from renpy.loader import YVANeusEX
 except Exception:
     pass
 from renpy import script
