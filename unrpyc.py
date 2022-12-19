@@ -35,9 +35,15 @@ PY2 = sys.version_info < (3, 0)
 import renpy.object
 
 try:
+    import renpy.config
     from renpy.loader import YVANeusEX
-except Exception:
+except:
     pass
+
+from renpy import script
+if(hasattr(script, 'RPYC2_HEADER')):
+    RPYC_Header = script.RPYC2_HEADER
+
 from renpy import script
 if(hasattr(script, 'RPYC2_HEADER')):
     RPYC_Header = script.RPYC2_HEADER
@@ -331,7 +337,6 @@ def main():
     if args.translation_file:
         with open(args.translation_file, 'rb') as in_file:
             args.translations = in_file.read()
-
     # Expand wildcards
     def glob_or_complain(s):
         retval = glob.glob(s)
