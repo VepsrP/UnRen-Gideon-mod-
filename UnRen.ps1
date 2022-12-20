@@ -47,10 +47,12 @@ function extract {
 function decompile {
 
     Set-Location -Path $gamedir
-    $scripts = Get-ChildItem -Path $gamedir -Filter "*.rpyc" -Recurse -Name
-    foreach ($script in $scripts)
+    if (Test-Path "$pythondir\Lib")
     {
-        & "$pythondir\python.exe" "-O" "$currentdir\unrpyc.py" "-c" "--init-offset" "$script"
+        & "$pythondir\python.exe" "-O" "$currentdir\unrpyc.py" "-c" "--init-offset" $gamedir
+        Write-Host ""
+    } else {
+        & "$pythondir\python.exe" "$currentdir\unrpyc.py" "-c" "--init-offset" $gamedir
         Write-Host ""
     }
     Write-Host "All Scripts are decompiled"
@@ -256,6 +258,15 @@ if ((Test-Path "$currentdir\renpy") -and (Test-Path "$currentdir\game"))
     Write-Host "  Press any key to exit..."
     Read-Host
     Exit
+}
+
+$Env:PYTHONHOME=$pythondir
+if (Test-Path "$currentdir\lib\pythonlib2.7"){
+    $Env:PYTHONPATH="$currentdir\lib\pythonlib2.7"
+} elseif (Test-Path "$currentdir\lib\python2.7") {
+    $Env:PYTHONPATH="$currentdir\lib\python2.7"
+} elseif (Test-Path "$currentdir\lib\python3.9") {
+    $Env:PYTHONPATH="$currentdir\lib\python3.9"
 }
 
 menu
