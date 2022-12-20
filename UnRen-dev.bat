@@ -1,4 +1,5 @@
 @echo off
+chcp 65001
 REM --------------------------------------------------------------------------------
 REM Configuration:
 REM   Set a Quick Save and Quick Load hotkey - http://www.pygame.org/docs/ref/key.html
@@ -55,6 +56,7 @@ REM ----------------------------------------------------------------------------
 REM Set our paths, and make sure we can find python exe
 REM --------------------------------------------------------------------------------
 set "currentdir=%~dp0%"
+
 if exist "lib\windows-x86_64\python.exe" (
 	if not "%PROCESSOR_ARCHITECTURE%"=="x86" (
 		set "pythondir=%currentdir%lib\windows-x86_64\"
@@ -103,6 +105,14 @@ if exist "game" if exist "renpy" (
 	echo.
 	pause>nul|set/p=.            Press any key to exit...
 	exit
+)
+set "PYTHONHOME=%pythondir%"
+if exist "%currentdir%lib\pythonlib2.7" (
+	set "PYTHONPATH=%currentdir%lib\pythonlib2.7"
+) else if exist "%currentdir%lib\python2.7" (
+	set "PYTHONPATH=%currentdir%lib\python2.7"
+) else if exist "%currentdir%lib\python3.9" (
+	set "PYTHONPATH=%currentdir%lib\python3.9"
 )
 
 :menu
@@ -173,43 +183,39 @@ REM ----------------------------------------------------------------------------
 echo   Searching for rpyc files...
 cd "%gamedir%"
 REM set "PYTHONPATH=%~dp0%"
-for /r %%f in (*.rpyc) do (
-	if not %%~nf == un (
-		if exist "%pythondir%Lib" (
-			if "%option%" == "2" (
-				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-				"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset "%%f"
-			)
-			if "%option%" == "9" (
-				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-				"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset "%%f"
-			)
-			if "%option%" == "8" (
-				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-				"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset "%%f"
-			)
-			if "%option%" == "7" (
-				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-				"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset --try-harder "%%f"
-			)
-		) else (
-			if "%option%" == "2" (
-				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-				"%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%%f"
-			)
-			if "%option%" == "9" (
-				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-				"%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%%f"
-			)
-			if "%option%" == "8" (
-				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-				"%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%%f"
-			)
-			if "%option%" == "7" (
-				echo    + Decompiling "%%~nf%%~xf" - %%~zf bytes
-				"%pythondir%python.exe" "%unrpycpy%" -c --init-offset --try-harder "%%f"
-			)
-		)
+if exist "%pythondir%Lib" (
+	if "%option%" == "2" (
+		echo    + Searching for rpyc files in %gamedir%
+		"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset "%gamedir%
+	)
+	if "%option%" == "9" (
+		echo    + Searching for rpyc files in %gamedir%
+		"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset "%gamedir%
+	)
+	if "%option%" == "8" (
+		echo    + Searching for rpyc files in %gamedir%
+		"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset "%gamedir%
+	)
+	if "%option%" == "7" (
+		echo    + Searching for rpyc files in %gamedir%
+		"%pythondir%python.exe" -O "%unrpycpy%" -c --init-offset --try-harder "%gamedir%
+	)
+) else (
+	if "%option%" == "2" (
+		echo    + Searching for rpyc files in %gamedir%
+		"%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%gamedir%
+	)
+	if "%option%" == "9" (
+		echo    + Searching for rpyc files in %gamedir%
+		"%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%gamedir%
+	)
+	if "%option%" == "8" (
+		echo    + Searching for rpyc files in %gamedir%
+		"%pythondir%python.exe" "%unrpycpy%" -c --init-offset "%gamedir%
+	)
+	if "%option%" == "7" (
+		echo    + Searching for rpyc files in %gamedir%
+		"%pythondir%python.exe" "%unrpycpy%" -c --init-offset --try-harder "%gamedir%
 	)
 )
 echo.
