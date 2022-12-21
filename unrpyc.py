@@ -44,10 +44,6 @@ from renpy import script
 if(hasattr(script, 'RPYC2_HEADER')):
     RPYC_Header = script.RPYC2_HEADER
 
-from renpy import script
-if(hasattr(script, 'RPYC2_HEADER')):
-    RPYC_Header = script.RPYC2_HEADER
-
 try:
     from multiprocessing import Pool, Lock, cpu_count
 except ImportError:
