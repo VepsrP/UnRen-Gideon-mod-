@@ -54,7 +54,7 @@ class RenPyArchive:
         self.file = filename
         self.files = {}
         self.handle = open(self.file, 'rb')
-        base, ext = filename.split(".")
+        base, ext = filename.rsplit(".", 1)
         renpy.config.archives.append(base)
         renpy.config.searchpath = [os.path.dirname(os.path.realpath(self.file))]
         renpy.config.basedir = os.path.dirname(renpy.config.searchpath[0])
