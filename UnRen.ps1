@@ -45,8 +45,6 @@ function extract {
 
 #
 function decompile {
-
-    Set-Location -Path $gamedir
     if (Test-Path "$pythondir\Lib")
     {
         & "$pythondir\python.exe" "-O" "$currentdir\unrpyc.py" "-c" "--init-offset" $gamedir
