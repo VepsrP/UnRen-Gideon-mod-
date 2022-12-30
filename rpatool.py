@@ -71,30 +71,50 @@ if __name__ == "__main__":
         epilog='The FILE argument can optionally be in ARCHIVE=REAL format, mapping a file in the archive file system to a file on your real file system. An example of this: rpatool -x test.rpa script.rpyc=/home/foo/test.rpyc',
         add_help=False)
 
-    parser.add_argument('archive', metavar='ARCHIVE', help='The Ren\'py archive file to operate on.')
+    parser.add_argument('-r',action="store_true", dest='remove', help='Delete archives after unpacking.')
+    parser.add_argument('dir',type=str, help='The Ren\'py dir to operate on.')
     arguments = parser.parse_args()
-    archive = arguments.archive
+    directory = arguments.dir
+    remove = arguments.remove
     output = '.'
-    # try:
-    archive = RenPyArchive(archive)
+    try:
+        archive_extentions = []
+        for handler in renpy.loader.archive_handlers:
+            for ext in handler.get_supported_extensions():
+                if ext not in archive_extentions:
+                    archive_extentions.append(ext)
+        archives = []
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                base, ext = file.rsplit('.', 1)
+                if '.'+ext in archive_extentions:
+                    archives.append(file)
+        for arch in archives:
+            print("  Unpacking \"{0}\" acrhive.".format(arch))
+            archive = RenPyArchive(arch)
 
-    files = archive.list()
+            files = archive.list()
 
-    # Create output directory if not present.
-    if not os.path.exists(output):
-        os.makedirs(output)
+            # Create output directory if not present.
+            if not os.path.exists(output):
+                os.makedirs(output)
 
-    # Iterate over files to extract.
-    for filename in files:
-        outfile = filename
-        contents = archive.read(filename)
-        if(None != contents):
-            # Create output directory for file if not present.
-            if not os.path.exists(os.path.dirname(os.path.join(output, outfile))):
-                os.makedirs(os.path.dirname(os.path.join(output, outfile)))
+            # Iterate over files to extract.
+            for filename in files:
+                outfile = filename
+                contents = archive.read(filename)
+                if(None != contents):
+                    # Create output directory for file if not present.
+                    if not os.path.exists(os.path.dirname(os.path.join(output, outfile))):
+                        os.makedirs(os.path.dirname(os.path.join(output, outfile)))
 
-            with open(os.path.join(output, outfile), 'wb') as file:
-                file.write(contents)
-    # except Exception as err:
-    #     print(err)
-    #     sys.exit(1)
+                    with open(os.path.join(output, outfile), 'wb') as file:
+                        file.write(contents)
+        if remove:
+            for archive in archives:
+                print("Arcgive {0} has been deleted.".format(archive))
+                os.remove("{0}{1}".format(directory, archive))
+        print("  All archives is unpaking.")
+    except Exception as err:
+        print(err)
+        sys.exit(1)

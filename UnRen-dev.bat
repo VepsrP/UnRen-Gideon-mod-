@@ -156,12 +156,8 @@ REM ----------------------------------------------------------------------------
 REM Unpack RPA
 REM --------------------------------------------------------------------------------
 echo   Searching for RPA packages
-cd "%gamedir%"
 
-for %%f in (*.rpa *.pea *.extra *.jas) do (
-	echo    + Unpacking "%%~nf%%~xf" - %%~zf bytes
-	"%pythondir%python.exe" -O "%rpatool%" "%%f"
-)
+"%pythondir%python.exe" -O "%rpatool%" "%gamedir%
 echo.
 
 if not "%option%" == "9" (
