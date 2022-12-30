@@ -44,10 +44,6 @@ from renpy import script
 if(hasattr(script, 'RPYC2_HEADER')):
     RPYC_Header = script.RPYC2_HEADER
 
-from renpy import script
-if(hasattr(script, 'RPYC2_HEADER')):
-    RPYC_Header = script.RPYC2_HEADER
-
 try:
     from multiprocessing import Pool, Lock, cpu_count
 except ImportError:
@@ -343,6 +339,9 @@ def main():
         if not retval:
             print("File not found: " + s)
         return retval
+
+    for index, item in enumerate(args.file):
+        args.file[index] = item.replace("\"", "")
     filesAndDirs = list(map(glob_or_complain, args.file))
     # Concatenate lists
     filesAndDirs = list(itertools.chain(*filesAndDirs))
