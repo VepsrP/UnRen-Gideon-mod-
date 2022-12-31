@@ -23,7 +23,7 @@ import sys
 from operator import itemgetter
 
 from .util import DecompilerBase, First, reconstruct_paraminfo, \
-                 reconstruct_arginfo, split_logical_lines, Dispatcher
+                 reconstruct_arginfo, split_logical_lines, Dispatcher, convert_ast
 
 
 from renpy import ui, sl2
@@ -88,6 +88,7 @@ class SL2Decompiler(DecompilerBase):
         # the first condition is named if or showif, the rest elif
         keyword = First(keyword, "elif")
         for condition, block in ast.entries:
+            block = convert_ast(block)
             self.advance_to_line(block.location[1])
             self.indent()
             # if condition is None, this is the else clause
@@ -353,6 +354,7 @@ class SL2Decompiler(DecompilerBase):
         children_with_keywords = []
         children_after_keywords = []
         for i in children:
+            i = convert_ast(i)
             if i.location[1] > last_keyword_line:
                 children_after_keywords.append(i)
             else:

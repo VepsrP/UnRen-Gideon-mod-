@@ -156,7 +156,7 @@ REM ----------------------------------------------------------------------------
 REM Unpack RPA
 REM --------------------------------------------------------------------------------
 echo   Searching for RPA packages
-
+cd %gamedir%
 "%pythondir%python.exe" -O "%rpatool%" "%gamedir%
 echo.
 
