@@ -121,10 +121,10 @@ if __name__ == "__main__":
             # except Exception as err:
             #     print(err)
             #     sys.exit(1)
-            print("  All archives is unpaking.")
-    if remove:
-        for archive in archives:
-            print("  Arcgive {0} has been deleted.".format(archive))
-            os.remove("{0}{1}".format(directory, archive))
+        print("  All archives is unpaking.")
+        if remove:
+            for archive in archives:
+                print("  Arcgive {0} has been deleted.".format(archive))
+                os.remove("{0}{1}".format(directory, archive))
     else:
         print("  There are no archives in the game folder.")

@@ -44,22 +44,19 @@ from renpy import script
 if(hasattr(script, 'RPYC2_HEADER')):
     RPYC_Header = script.RPYC2_HEADER
 
-try:
-    from multiprocessing import Pool, Lock, cpu_count
-except ImportError:
     # Mock required support when multiprocessing is unavailable
-    def cpu_count():
-        return 1
+def cpu_count():
+    return 1
 
-    class Lock:
-        def __enter__(self):
-            pass
-        def __exit__(self, type, value, traceback):
-            pass
-        def acquire(self, block=True, timeout=None):
-            pass
-        def release(self):
-            pass
+class Lock:
+    def __enter__(self):
+        pass
+    def __exit__(self, type, value, traceback):
+        pass
+    def acquire(self, block=True, timeout=None):
+        pass
+    def release(self):
+        pass
 
 import decompiler
 from decompiler import magic, astdump, translate
@@ -351,7 +348,7 @@ def main():
     for i in filesAndDirs:
         if path.isdir(i):
             for dirpath, dirnames, filenames in walk(i):
-                files.extend(path.join(dirpath, j) for j in filenames if len(j) >= 5 and j.endswith(('.rpyc', '.rpymc')))
+                files.extend(path.join(dirpath, j) for j in filenames if len(j) >= 5 and j.endswith(('.rpyc', '.rpymc', '.rpypig')))
         else:
             files.append(i)
 

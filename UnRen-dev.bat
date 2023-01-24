@@ -55,39 +55,37 @@ for /f "tokens=4-5 delims=. " %%i in ('ver') do set version=%%i.%%j
 REM --------------------------------------------------------------------------------
 REM Set our paths, and make sure we can find python exe
 REM --------------------------------------------------------------------------------
-set "currentdir=%~dp0%"
 
 if exist "lib\windows-x86_64\python.exe" (
 	if not "%PROCESSOR_ARCHITECTURE%"=="x86" (
-		set "pythondir=%currentdir%lib\windows-x86_64\"
+		set "pythondir=%cd%\lib\windows-x86_64\"
 	)
 	if exist "lib\windows-i686\python.exe" (
-		set "pythondir=%currentdir%lib\windows-i686\"
+		set "pythondir=%cd%\lib\windows-i686\"
 	)
 ) else if exist "lib\windows-i686\python.exe" (
-	set "pythondir=%currentdir%lib\windows-i686\"
+	set "pythondir=%cd%\lib\windows-i686\"
 )
 if exist "lib\py2-windows-x86_64\python.exe" (
 	if not "%PROCESSOR_ARCHITECTURE%"=="x86" (
-		set "pythondir=%currentdir%lib\py2-windows-x86_64\"
+		set "pythondir=%cd%\lib\py2-windows-x86_64\"
     )
 	if exist "lib\py2-windows-i686\python.exe" (
-		set "pythondir=%currentdir%lib\py2-windows-i686\"
+		set "pythondir=%cd%\lib\py2-windows-i686\"
 	)
 ) else if exist "lib\py2-windows-i686\python.exe" (
-	set "pythondir=%currentdir%lib\py2-windows-i686\"
+	set "pythondir=%cd%\lib\py2-windows-i686\"
 )
 if exist "lib\py3-windows-x86_64\python.exe" (
 	if not "%PROCESSOR_ARCHITECTURE%"=="x86" (
-		set "pythondir=%currentdir%lib\py3-windows-x86_64\"
+		set "pythondir=%cd%\lib\py3-windows-x86_64\"
     )
 	if exist "lib\py3-windows-i686\python.exe" (
-		set "pythondir=%currentdir%lib\py3-windows-i686\"
+		set "pythondir=%cd%\lib\py3-windows-i686\"
 	)
 ) else if exist "lib\py3-windows-i686\python.exe" (
-	set "pythondir=%currentdir%lib\py3-windows-i686\"
+	set "pythondir=%cd%\lib\py3-windows-i686\"
 )
-
 if not exist "%pythondir%" (
 	echo    ! Error: Cannot locate python directory, unable to continue.
 	echo             Are you sure we're in the game's root directory?
@@ -97,8 +95,8 @@ if not exist "%pythondir%" (
 )
 
 if exist "game" if exist "renpy" (
-	set "renpydir=%currentdir%renpy\"
-	set "gamedir=%currentdir%game\"
+	set "renpydir=%cd%\renpy\"
+	set "gamedir=%cd%\game\"
 ) else (
 	echo    ! Error: Cannot locate game directory, unable to continue.
 	echo             Are you sure we're in the game's root directory?
@@ -107,12 +105,12 @@ if exist "game" if exist "renpy" (
 	exit
 )
 set "PYTHONHOME=%pythondir%"
-if exist "%currentdir%lib\pythonlib2.7" (
-	set "PYTHONPATH=%currentdir%lib\pythonlib2.7"
-) else if exist "%currentdir%lib\python2.7" (
-	set "PYTHONPATH=%currentdir%lib\python2.7"
-) else if exist "%currentdir%lib\python3.9" (
-	set "PYTHONPATH=%currentdir%lib\python3.9"
+if exist "lib\pythonlib2.7" (
+	set "PYTHONPATH=%cd%\lib\pythonlib2.7"
+) else if exist "lib\python2.7" (
+	set "PYTHONPATH=%cd%\lib\python2.7"
+) else if exist "lib\python3.9" (
+	set "PYTHONPATH=%cd%\lib\python3.9"
 )
 
 :menu
@@ -150,14 +148,14 @@ goto init
 REM --------------------------------------------------------------------------------
 REM Write _rpatool.py from our base64 strings
 REM --------------------------------------------------------------------------------
-set "rpatool=%currentdir%rpatool.py"
+set "rpatool=%cd%\rpatool.py"
 
 REM --------------------------------------------------------------------------------
 REM Unpack RPA
 REM --------------------------------------------------------------------------------
 echo   Searching for RPA packages
 cd %gamedir%
-"%pythondir%python.exe" -O "%rpatool%" "%gamedir%
+"%pythondir%python.exe" -O "%rpatool%" "%cd%
 echo.
 
 if not "%option%" == "9" (
@@ -171,7 +169,7 @@ REM ----------------------------------------------------------------------------
 REM Write to temporary file first, then convert. Needed due to binary file
 REM --------------------------------------------------------------------------------
 
-set "unrpycpy=%currentdir%unrpyc.py"
+set "unrpycpy=%cd%\unrpyc.py"
 
 REM --------------------------------------------------------------------------------
 REM Decompile rpyc files
