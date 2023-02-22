@@ -105,6 +105,7 @@ if exist "game" if exist "renpy" (
 	exit
 )
 set "PYTHONHOME=%pythondir%"
+set "currentdir=%cd%"
 if exist "lib\pythonlib2.7" (
 	set "PYTHONPATH=%cd%\lib\pythonlib2.7"
 ) else if exist "lib\python2.7" (
@@ -157,7 +158,7 @@ echo   Searching for RPA packages
 cd %gamedir%
 "%pythondir%python.exe" -O "%rpatool%" "%cd%
 echo.
-
+cd %currentdir%
 if not "%option%" == "9" (
 	if not "%option%" == "8" (
 		goto finish
@@ -214,6 +215,7 @@ if exist "%pythondir%Lib" (
 echo.
 
 echo.
+cd %currentdir%
 if not "%option%" == "9" (
 	goto finish
 )

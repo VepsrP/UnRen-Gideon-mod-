@@ -33,7 +33,7 @@ class RenPyArchive:
     # Read file from archive or internal storage.
     def read(self, filename):
         filename = self.convert_filename(filename)
-        if(isinstance(self.indexes[filename], list)):
+        if(filename != '.' and isinstance(self.indexes[filename], list)):
             fileindexes = []
             for i in self.indexes[filename][0]:
                 if (i != b'') and (i != ''):
@@ -94,11 +94,10 @@ if __name__ == "__main__":
                     archives.append(file)
             except:
                 pass
-    print()
     if archives != []:
         for arch in archives:
             print("  Unpacking \"{0}\" acrhive.".format(arch))
-            #try:
+            # try:
             archive = RenPyArchive(arch, archives.index(arch))
 
             files = archive.list()
@@ -121,10 +120,10 @@ if __name__ == "__main__":
             # except Exception as err:
             #     print(err)
             #     sys.exit(1)
-        print("  All archives is unpaking.")
+        print("  All archives unpaked.")
         if remove:
             for archive in archives:
-                print("  Arcgive {0} has been deleted.".format(archive))
+                print("  Archive {0} has been deleted.".format(archive))
                 os.remove("{0}{1}".format(directory, archive))
     else:
         print("  There are no archives in the game folder.")
