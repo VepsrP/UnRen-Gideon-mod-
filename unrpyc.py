@@ -187,11 +187,10 @@ def read_ast_from_file(in_file):
 
         raw_contents = chunks
 
-    if(PY2):
-        if("YVANeusEX" in globals()):
+    if("YVANeusEX" in globals()):
             raw_contents = YVANeusEX.encrypt(bytearray(raw_contents[1]), YVANeusEX.cipherkey, True) + YVANeusEX.encrypt(bytearray(raw_contents[2]), YVANeusEX.cipherkey, True)
-        else:
-            raw_contents = raw_contents[1].decode('zlib')
+    elif(PY2):
+        raw_contents = raw_contents[1].decode('zlib')
     else:
         raw_contents = codecs.decode(raw_contents, encoding="zlib")
     data, stmts = revertable_switch(raw_contents)

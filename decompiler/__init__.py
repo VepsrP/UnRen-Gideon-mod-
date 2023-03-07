@@ -245,7 +245,6 @@ class Decompiler(DecompilerBase):
 
     @dispatch(store.ATL.RawChoice)
     def print_atl_rawchoice(self, ast):
-        print(ast.__dict__)
         for loc, chance, block in ast.choices:
             self.indent()
             self.write("choice")
