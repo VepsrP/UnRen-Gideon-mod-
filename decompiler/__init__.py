@@ -32,7 +32,7 @@ from . import magic
 import renpy
 
 magic.fake_package("renpy")
-magic.fake_package("store")
+store = magic.fake_package("store")
 renpy = reload(renpy)
 
 from . import screendecompiler
@@ -107,7 +107,7 @@ class Decompiler(DecompilerBase):
         if (isinstance(ast, (tuple, list)) and len(ast) > 1 and
             isinstance(ast[-1], renpy.ast.Return) and
             (not hasattr(ast[-1], 'expression') or ast[-1].expression is None) and
-            ast[-1].linenumber == ast[-2].linenumber):
+            (hasattr(ast[-1], "linenumber") and ast[-1].linenumber == ast[-2].linenumber)):
             # A very crude version check, but currently the best we can do.
             # Note that this commit first appears in the 6.99 release.
             self.is_356c6e34_or_later = True
@@ -216,6 +216,7 @@ class Decompiler(DecompilerBase):
             self.write(",")
 
     @dispatch(renpy.atl.RawBlock)
+    @dispatch(store.ATL.RawBlock)
     def print_atl_rawblock(self, ast):
         self.indent()
         self.write("block:")
@@ -231,6 +232,20 @@ class Decompiler(DecompilerBase):
     @dispatch(renpy.atl.RawChoice)
     def print_atl_rawchoice(self, ast):
         for chance, block in ast.choices:
+            self.indent()
+            self.write("choice")
+            if chance != "1.0":
+                self.write(" %s" % chance)
+            self.write(":")
+            self.print_atl(block)
+        if (self.index + 1 < len(self.block) and
+        	isinstance(self.block[self.index + 1], renpy.atl.RawChoice)):
+            self.indent()
+            self.write("pass")
+
+    @dispatch(store.ATL.RawChoice)
+    def print_atl_rawchoice(self, ast):
+        for loc, chance, block in ast.choices:
             self.indent()
             self.write("choice")
             if chance != "1.0":
@@ -277,6 +292,7 @@ class Decompiler(DecompilerBase):
             self.write("pass")
 
     @dispatch(renpy.atl.RawRepeat)
+    @dispatch(store.ATL.RawRepeat)
     def print_atl_rawrepeat(self, ast):
         self.indent()
         self.write("repeat")
@@ -527,7 +543,7 @@ class Decompiler(DecompilerBase):
         for i, (condition, block) in enumerate(ast.entries):
             # The non-Unicode string "True" is the condition for else:
 
-            if((i + 1) == len(ast.entries) and ((PY2 and not isinstance(condition, unicode)) or (PY3 and not isinstance(condition, str)) or condition == u'True')):
+            if((i > 0) and (i + 1) == len(ast.entries) and ((PY2 and not isinstance(condition, unicode)) or (PY3 and not isinstance(condition, str)) or condition == u'True')):
                 self.indent()
                 self.write("else:")
             else:
@@ -561,6 +577,8 @@ class Decompiler(DecompilerBase):
         self.write("pass")
 
     def should_come_before(self, first, second):
+        first = util.convert_ast(first)
+        second = util.convert_ast(second)
         return first.linenumber < second.linenumber
 
     def require_init(self):
@@ -570,6 +588,7 @@ class Decompiler(DecompilerBase):
     def set_best_init_offset(self, nodes):
         votes = {}
         for ast in nodes:
+            ast = util.convert_ast(ast)
             if not isinstance(ast, renpy.ast.Init):
                 continue
             offset = ast.priority

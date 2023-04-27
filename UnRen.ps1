@@ -25,17 +25,21 @@ function extract {
     }
 
     Set-Location -Path $gamedir
-    $archives = Get-ChildItem -Path $gamedir -Filter "*.rpa" -Recurse -Name
-    $archives +=Get-ChildItem -Path $gamedir -Filter "*.pea" -Recurse -Name
 
-    foreach ($archive in $archives) {
-        Write-Host "    + Unpacking $archive"
-        Write-Host ""
-        & "$pythondir\python.exe" "-O" "$currentdir\rpatool.py" "$archive"
+    if (Test-Path "$pythondir\Lib")
+    {
         if($key -eq "y"){
-            Write-Host "       + Delete $archive"
-            Write-Host ""
-            Remove-Item "$gamedir\$archive"
+            & "$pythondir\python.exe" "-O" "$currentdir\rpatool.py" "-r" "$gamedir"
+        }
+        else {
+            & "$pythondir\python.exe" "-O" "$currentdir\rpatool.py" "$gamedir"
+        }
+    } else {
+        if($key -eq "y"){
+            & "$pythondir\python.exe" "$currentdir\rpatool.py" "-r" "$gamedir"
+        }
+        else {
+            & "$pythondir\python.exe" "$currentdir\rpatool.py" "$gamedir"
         }
     }
 
