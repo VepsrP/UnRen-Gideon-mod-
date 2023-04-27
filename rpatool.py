@@ -34,19 +34,11 @@ class RenPyArchive:
     def read(self, filename):
         filename = self.convert_filename(filename)
         if(filename != '.' and isinstance(self.indexes[filename], list)):
-            fileindexes = []
-            for i in self.indexes[filename][0]:
-                if (i != b'') and (i != ''):
-                    fileindexes.append(i)
-            try:
-                (offset, length, prefix) = fileindexes
-            except Exception:
-                (offset, length) = fileindexes
-                prefix = ''
-            if not isinstance(prefix, (bytes)):
-                prefix = prefix.encode("latin-1")
-            self.handle.seek(offset)
-            return prefix + self.handle.read(length - len(prefix))
+            if hasattr(renpy.loader, "load_from_archive"):
+                subfile =  renpy.loader.load_from_archive(filename)
+            else:
+                subfile =  renpy.loader.load_core(filename)
+            return subfile.read()
         else: return None
 
     # Load archive.

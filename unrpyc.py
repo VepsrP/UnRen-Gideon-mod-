@@ -59,7 +59,7 @@ class Lock:
         pass
 
 import decompiler
-from decompiler import magic, astdump, translate
+from decompiler import magic, astdump, translate, util
 
 # special definitions for special classes
 if(not PY2):

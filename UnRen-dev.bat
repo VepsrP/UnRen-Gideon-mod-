@@ -59,8 +59,7 @@ REM ----------------------------------------------------------------------------
 if exist "lib\windows-x86_64\python.exe" (
 	if not "%PROCESSOR_ARCHITECTURE%"=="x86" (
 		set "pythondir=%cd%\lib\windows-x86_64\"
-	)
-	if exist "lib\windows-i686\python.exe" (
+	) else if exist "lib\windows-i686\python.exe" (
 		set "pythondir=%cd%\lib\windows-i686\"
 	)
 ) else if exist "lib\windows-i686\python.exe" (
@@ -68,9 +67,9 @@ if exist "lib\windows-x86_64\python.exe" (
 )
 if exist "lib\py2-windows-x86_64\python.exe" (
 	if not "%PROCESSOR_ARCHITECTURE%"=="x86" (
+		echo "check1"
 		set "pythondir=%cd%\lib\py2-windows-x86_64\"
-    )
-	if exist "lib\py2-windows-i686\python.exe" (
+    ) else if exist "lib\py2-windows-i686\python.exe" (
 		set "pythondir=%cd%\lib\py2-windows-i686\"
 	)
 ) else if exist "lib\py2-windows-i686\python.exe" (
@@ -79,8 +78,7 @@ if exist "lib\py2-windows-x86_64\python.exe" (
 if exist "lib\py3-windows-x86_64\python.exe" (
 	if not "%PROCESSOR_ARCHITECTURE%"=="x86" (
 		set "pythondir=%cd%\lib\py3-windows-x86_64\"
-    )
-	if exist "lib\py3-windows-i686\python.exe" (
+    ) else if exist "lib\py3-windows-i686\python.exe" (
 		set "pythondir=%cd%\lib\py3-windows-i686\"
 	)
 ) else if exist "lib\py3-windows-i686\python.exe" (

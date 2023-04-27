@@ -107,7 +107,7 @@ class Decompiler(DecompilerBase):
         if (isinstance(ast, (tuple, list)) and len(ast) > 1 and
             isinstance(ast[-1], renpy.ast.Return) and
             (not hasattr(ast[-1], 'expression') or ast[-1].expression is None) and
-            ast[-1].linenumber == ast[-2].linenumber):
+            (hasattr(ast[-1], "linenumber") and ast[-1].linenumber == ast[-2].linenumber)):
             # A very crude version check, but currently the best we can do.
             # Note that this commit first appears in the 6.99 release.
             self.is_356c6e34_or_later = True
@@ -577,6 +577,8 @@ class Decompiler(DecompilerBase):
         self.write("pass")
 
     def should_come_before(self, first, second):
+        first = util.convert_ast(first)
+        second = util.convert_ast(second)
         return first.linenumber < second.linenumber
 
     def require_init(self):
@@ -586,6 +588,7 @@ class Decompiler(DecompilerBase):
     def set_best_init_offset(self, nodes):
         votes = {}
         for ast in nodes:
+            ast = util.convert_ast(ast)
             if not isinstance(ast, renpy.ast.Init):
                 continue
             offset = ast.priority

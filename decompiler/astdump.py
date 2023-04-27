@@ -25,6 +25,7 @@ import inspect
 from . import codegen
 import ast as py_ast
 import renpy
+from decompiler import util
 
 PY2 = sys.version_info < (3, 0)
 
@@ -208,7 +209,7 @@ class AstDumper(object):
             self.print_ast(codegen.to_source(ast, str(self.indentation)))
             self.p('>')
             return
-
+        ast = util.convert_ast(ast)
         keys = list(i for i in dir(ast) if self.should_print_key(ast, i))
         if keys:
             self.p(' ')
