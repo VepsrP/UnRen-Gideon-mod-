@@ -236,6 +236,7 @@ def reconstruct_paraminfo(paraminfo):
     return "".join(rv)
 
 def reconstruct_arginfo(arginfo):
+    arginfo = convert_ast(arginfo)
     if arginfo is None:
         return ""
 

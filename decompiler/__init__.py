@@ -20,7 +20,7 @@
 
 from __future__ import unicode_literals
 from .util import DecompilerBase, First, WordConcatenator, reconstruct_paraminfo, \
-    reconstruct_arginfo, string_escape, split_logical_lines, Dispatcher
+    reconstruct_arginfo, string_escape, split_logical_lines, Dispatcher, convert_ast
 from .util import say_get_code
 
 from operator import itemgetter
@@ -144,6 +144,7 @@ class Decompiler(DecompilerBase):
 
     def print_atl(self, ast):
         with self.increase_indent():
+            ast = convert_ast(ast)
             self.advance_to_line(ast.loc[1])
             if ast.statements:
                 self.print_nodes(ast.statements)
@@ -157,15 +158,14 @@ class Decompiler(DecompilerBase):
     @dispatch(renpy.atl.RawMultipurpose)
     def print_atl_rawmulti(self, ast):
         warp_words = WordConcatenator(False)
-
+        ast = convert_ast(ast)
         # warpers
         if ast.warp_function:
             warp_words.append("warp", ast.warp_function, ast.duration)
         elif ast.warper:
             warp_words.append(ast.warper, ast.duration)
-        elif ast.duration != "0":
+        elif ast.duration != "0" and ast.duration != b"0":
             warp_words.append("pause", ast.duration)
-
         warp = warp_words.join()
         words = WordConcatenator(warp and warp[-1] != ' ', True)
 
@@ -433,6 +433,7 @@ class Decompiler(DecompilerBase):
         # and with node afterwards are part of a postfix
         # with statement. detect this and process it properly
         if hasattr(ast, "paired") and ast.paired is not None:
+            self.block[self.index + 2] = convert_ast(self.block[self.index + 2])
             # Sanity check. check if there's a matching with statement two nodes further
             if not(isinstance(self.block[self.index + 2], renpy.ast.With) and
                    self.block[self.index + 2].expr == ast.paired):
@@ -514,7 +515,7 @@ class Decompiler(DecompilerBase):
 
         # We don't have to check if there's enough elements here,
         # since a Label or a Pass is always emitted after a Call.
-        next_block = self.block[self.index + 1]
+        next_block = convert_ast(self.block[self.index + 1])
         if isinstance(next_block, renpy.ast.Label):
             words.append("from %s" % next_block.name)
 

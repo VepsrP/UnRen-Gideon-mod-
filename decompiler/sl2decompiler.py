@@ -243,7 +243,7 @@ class SL2Decompiler(DecompilerBase):
         (behavior.OnEvent, 0):                  ("on", 0),
         (behavior.MouseArea, 0):                ("mousearea", 0),
         (behavior.MouseArea, None):             ("mousearea", 0),
-        (behavior.DismissBehavior, "default"):  ("default", "many"),
+        (behavior.DismissBehavior, "default"):  ("dismiss", "many"),
         (ui._add, None):                        ("add", 0),
         (sld.sl2add, None):                     ("add", 0),
         (ui._hotbar, "hotbar"):                 ("hotbar", 0),
