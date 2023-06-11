@@ -223,8 +223,8 @@ class SL2Decompiler(DecompilerBase):
         # since it results in cleaner code.
         if (not has_block and children == 1 and len(ast.children) == 1 and
             isinstance(ast.children[0], sl2.slast.SLDisplayable) and
-            ast.children[0].children and (not ast.keyword or
-                ast.children[0].location[1] > ast.keyword[-1][1].linenumber) and
+            ast.children[0].children and (not ast.keyword or( ast.keyword[-1][1] != None and 
+                ast.children[0].location[1] > ast.keyword[-1][1].linenumber)) and
             (atl_transform is None or ast.children[0].location[1] > atl_transform.loc[1])):
             self.print_keywords_and_children(ast.keyword, [],
                 ast.location[1], needs_colon=True, variable=variable, atl_transform=atl_transform)
@@ -243,7 +243,7 @@ class SL2Decompiler(DecompilerBase):
         (behavior.OnEvent, 0):                  ("on", 0),
         (behavior.MouseArea, 0):                ("mousearea", 0),
         (behavior.MouseArea, None):             ("mousearea", 0),
-        (behavior.DismissBehavior, "default"):  ("default", "many"),
+        (behavior.DismissBehavior, "default"):  ("dismiss", "many"),
         (ui._add, None):                        ("add", 0),
         (sld.sl2add, None):                     ("add", 0),
         (ui._hotbar, "hotbar"):                 ("hotbar", 0),
