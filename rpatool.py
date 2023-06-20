@@ -88,7 +88,7 @@ if __name__ == "__main__":
                 pass
     if archives != []:
         for arch in archives:
-            print("  Unpacking \"{0}\" acrhive.".format(arch))
+            print("  Unpacking \"{0}\" archive.".format(arch))
             # try:
             archive = RenPyArchive(arch, archives.index(arch))
 
@@ -112,7 +112,7 @@ if __name__ == "__main__":
             # except Exception as err:
             #     print(err)
             #     sys.exit(1)
-        print("  All archives unpaked.")
+        print("  All archives unpacked.")
         if remove:
             for archive in archives:
                 print("  Archive {0} has been deleted.".format(archive))
