@@ -185,6 +185,11 @@ class SL2Decompiler(DecompilerBase):
         self.indent()
         self.write("default %s = %s" % (ast.variable, ast.expression))
 
+    @dispatch(sl2.slast.SLContinue)
+    def print_continue(self, ast):
+        self.indent()
+        self.write("continue")
+
     @dispatch(sl2.slast.SLDisplayable)
     def print_displayable(self, ast, has_block=False):
         # slast.SLDisplayable represents a variety of statements. We can figure out
