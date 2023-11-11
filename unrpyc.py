@@ -32,6 +32,11 @@ from operator import itemgetter
 sys.path.append('..')
 PY2 = sys.version_info < (3, 0)
 
+try:
+    import main
+except:
+    pass
+
 import renpy.object
 
 try:

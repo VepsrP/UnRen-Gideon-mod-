@@ -243,7 +243,11 @@ def reconstruct_arginfo(arginfo):
     rv = []
     for i, (name, val) in enumerate(arginfo.arguments):
 
-        if(hasattr(arginfo, "__starred_indexes__") and hasattr(arginfo.starred_indexes, "__iter__") and i in arginfo.starred_indexes):
+        if(hasattr(arginfo, "starred_indexes") and hasattr(arginfo.starred_indexes.name, "__iter__") and i in arginfo.starred_indexes.name):
+            rv.append("*%s" % val)
+        elif(hasattr(arginfo, "doublestarred_indexes") and hasattr(arginfo.doublestarred_indexes.name, "__iter__") and i in arginfo.doublestarred_indexes.name):
+            rv.append("**%s" % val)
+        elif(hasattr(arginfo, "__starred_indexes__") and hasattr(arginfo.starred_indexes, "__iter__") and i in arginfo.starred_indexes):
             rv.append("*%s" % val)
         elif(hasattr(arginfo, "__doublestarred_indexes__") and hasattr(arginfo.doublestarred_indexes, "__iter__") and i in arginfo.doublestarred_indexes):
             rv.append("**%s" % val)

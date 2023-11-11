@@ -3,6 +3,10 @@ from __future__ import print_function
 import sys
 import os
 sys.path.append('..')
+try:
+    import main
+except:
+    pass
 import renpy.object
 import renpy.config
 import renpy.loader
@@ -73,9 +77,14 @@ if __name__ == "__main__":
     archive_extentions = []
     if hasattr(renpy.loader, "archive_handlers"):
         for handler in renpy.loader.archive_handlers:
-            for ext in handler.get_supported_extensions():
-                if ext not in archive_extentions:
-                    archive_extentions.append(ext)
+            if hasattr(handler, "get_supported_extensions"):
+                for ext in handler.get_supported_extensions():
+                    if ext not in archive_extentions:
+                        archive_extentions.append(ext)
+            if hasattr(handler, "get_supported_ext"):
+                for ext in handler.get_supported_ext():
+                    if ext not in archive_extentions:
+                        archive_extentions.append(ext)
     else: archive_extentions.append('.rpa')
     archives = []
     for root, dirs, files in os.walk(directory):
@@ -88,7 +97,7 @@ if __name__ == "__main__":
                 pass
     if archives != []:
         for arch in archives:
-            print("  Unpacking \"{0}\" acrhive.".format(arch))
+            print("  Unpacking \"{0}\" archive.".format(arch))
             # try:
             archive = RenPyArchive(arch, archives.index(arch))
 
@@ -112,10 +121,10 @@ if __name__ == "__main__":
             # except Exception as err:
             #     print(err)
             #     sys.exit(1)
-        print("  All archives unpaked.")
+        print("  All archives unpacked.")
         if remove:
             for archive in archives:
                 print("  Archive {0} has been deleted.".format(archive))
-                os.remove("{0}{1}".format(directory, archive))
+                os.remove("{0}\{1}".format(directory, archive))
     else:
         print("  There are no archives in the game folder.")

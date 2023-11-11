@@ -995,3 +995,12 @@ class Decompiler(DecompilerBase):
     def print_RPY(self, ast):
         self.indent()
         self.write("rpy {} {}".format(ast.rest[0], ast.rest[1]))
+
+    
+    @dispatch(renpy.ast.Camera)
+    def print_Camera(self, ast):
+        self.indent()
+        self.write("camera " + ast.at_list[0])
+        if ast.atl is not None:
+            self.write(":")
+            self.print_atl(ast.atl)
