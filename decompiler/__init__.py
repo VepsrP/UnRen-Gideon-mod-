@@ -1000,7 +1000,9 @@ class Decompiler(DecompilerBase):
     @dispatch(renpy.ast.Camera)
     def print_Camera(self, ast):
         self.indent()
-        self.write("camera " + ast.at_list[0])
+        self.write("camera " + ast.layer)
+        if ast.at_list != []:
+            self.write(" at " + ast.at_list[0])
         if ast.atl is not None:
             self.write(":")
             self.print_atl(ast.atl)
