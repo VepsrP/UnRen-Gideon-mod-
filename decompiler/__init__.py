@@ -995,3 +995,9 @@ class Decompiler(DecompilerBase):
     def print_RPY(self, ast):
         self.indent()
         self.write("rpy {} {}".format(ast.rest[0], ast.rest[1]))
+
+    
+    """ @dispatch(renpy.ast.Camera)
+    def print_Camera(self, ast):
+        self.indent()
+        self.write("$ %s(layer='%s')" % (ast.at_list[0], ast.layer)) """

@@ -51,8 +51,6 @@ class SL2Decompiler(DecompilerBase):
         super(SL2Decompiler, self).__init__(out_file, indentation, printlock)
         self.print_atl_callback = print_atl_callback
         self.tag_outside_block = tag_outside_block
-        self.lineno = None
-        self.wrote_colon = None
 
     # This dictionary is a mapping of Class: unbound_method, which is used to determine
     # what method to call for which slast class
@@ -237,7 +235,7 @@ class SL2Decompiler(DecompilerBase):
                 self.skip_indent_until_write = True
                 self.print_displayable(ast.children[0], True)
         else:
-                self.print_keywords_and_children(ast.keyword, ast.children,
+            self.print_keywords_and_children(ast.keyword, ast.children,
                  ast.location[1], has_block=has_block, variable=variable, atl_transform=atl_transform)
 
     displayable_names = {
@@ -246,34 +244,34 @@ class SL2Decompiler(DecompilerBase):
         (behavior.MouseArea, 0):                ("mousearea", 0),
         (behavior.MouseArea, None):             ("mousearea", 0),
         (behavior.DismissBehavior, "default"):  ("dismiss", "many"),
-        (behavior.Input, "input"):              ("input", 0),
-        (behavior.Timer, "default"):            ("timer", 0),
-        (behavior.Button, "button"):            ("button", 1),
+        (ui._add, None):                        ("add", 0),
         (sld.sl2add, None):                     ("add", 0),
+        (ui._hotbar, "hotbar"):                 ("hotbar", 0),
         (sld.sl2vbar, None):                    ("vbar", 0),
         (sld.sl2bar, None):                     ("bar", 0),
-        (sld.sl2viewport, "viewport"):          ("viewport", 1),
-        (sld.sl2vpgrid, "vpgrid"):              ("vpgrid", 'many'),
-        (ui._hotbar, "hotbar"):                 ("hotbar", 0),
-        (ui._add, None):                        ("add", 0),
         (ui._label, "label"):                   ("label", 0),
-        (ui._key, None):                        ("key", 0),
-        (ui._hotspot, "hotspot"):               ("hotspot", 1),
         (ui._textbutton, 0):                    ("textbutton", 0),
         (ui._textbutton, "button"):             ("textbutton", 0),
         (ui._imagebutton, "image_button"):      ("imagebutton", 0),
-        (ui._imagemap, "imagemap"):             ("imagemap", 'many'),
         (im.image, "default"):                  ("image", 0),
+        (behavior.Input, "input"):              ("input", 0),
+        (behavior.Timer, "default"):            ("timer", 0),
+        (ui._key, None):                        ("key", 0),
         (text.Text, "text"):                    ("text", 0),
+        (layout.Null, "default"):               ("null", 0),
         (dragdrop.Drag, None):                  ("drag", 1),
         (dragdrop.Drag, "drag"):                ("drag", 1),
-        (dragdrop.DragGroup, None):             ("draggroup", 'many'),
         (motion.Transform, "transform"):        ("transform", 1),
+        (ui._hotspot, "hotspot"):               ("hotspot", 1),
+        (sld.sl2viewport, "viewport"):          ("viewport", 1),
+        (behavior.Button, "button"):            ("button", 1),
         (layout.Window, "frame"):               ("frame", 1),
         (layout.Window, "window"):              ("window", 1),
-        (layout.Null, "default"):               ("null", 0),
+        (dragdrop.DragGroup, None):             ("draggroup", 'many'),
+        (ui._imagemap, "imagemap"):             ("imagemap", 'many'),
         (layout.Side, "side"):                  ("side", 'many'),
         (layout.Grid, "grid"):                  ("grid", 'many'),
+        (sld.sl2vpgrid, "vpgrid"):              ("vpgrid", 'many'),
         (layout.MultiBox, "fixed"):             ("fixed", 'many'),
         (layout.MultiBox, "vbox"):              ("vbox", 'many'),
         (layout.MultiBox, "hbox"):              ("hbox", 'many'),
@@ -296,13 +294,10 @@ class SL2Decompiler(DecompilerBase):
 
         # If lineno is None, we're already inside of a block.
         # Otherwise, we're on the line that could start a block.
-        self.lineno = lineno
-        templineno = False
-        self.wrote_colon = False
+        wrote_colon = False
         keywords_by_line = []
-        current_line = (self.lineno, [])
+        current_line = (lineno, [])
         keywords_somewhere = [] # These can go anywhere inside the block that there's room.
-        atl_printed = False
         if variable is not None:
             if current_line[0] is None:
                 keywords_somewhere.extend(("as", variable))
@@ -358,17 +353,6 @@ class SL2Decompiler(DecompilerBase):
         last_keyword_line = -1 if keywords_by_line[-1][0] is None else keywords_by_line[-1][0]
         children_with_keywords = []
         children_after_keywords = []
-        if atl_transform and ((children and children[0].location[1] > atl_transform.loc[1]) and (keywords and keywords[0][1].linenumber > atl_transform.loc[1])):
-            if atl_transform.loc[1]>=self.lineno:
-                templineno = self.lineno
-                self.lineno = atl_transform.loc[1]
-                self.wrote_colon = False
-            self.print_atl_sl2(atl_transform)
-            atl_printed = True
-            if templineno:
-                self.lineno = templineno
-                templineno = False
-            
         for i in children:
             i = convert_ast(i)
             if i.location[1] > last_keyword_line:
@@ -383,9 +367,9 @@ class SL2Decompiler(DecompilerBase):
             self.write(" %s" % ' '.join(keywords_by_line[0][1]))
         if keywords_somewhere: # this never happens if there's anything in block_contents
             # Hard case: we need to put a keyword somewhere inside the block, but we have no idea which line to put it on.
-            if self.lineno is not None:
+            if lineno is not None:
                 self.write(":")
-                self.wrote_colon = True
+                wrote_colon = True
             for index, child in enumerate(children_after_keywords):
                 if child.location[1] > self.linenumber + 1:
                     # We have at least one blank line before the next child. Put the keywords here.
@@ -404,9 +388,9 @@ class SL2Decompiler(DecompilerBase):
                     self.write(' '.join(keywords_somewhere))
         else:
             if block_contents or (not has_block and children_after_keywords):
-                if self.lineno is not None and atl_printed is not True:
+                if lineno is not None:
                     self.write(":")
-                    self.wrote_colon = True
+                    wrote_colon = True
                 with self.increase_indent():
                     for i in block_contents:
                         if isinstance(i[1], list):
@@ -417,18 +401,15 @@ class SL2Decompiler(DecompilerBase):
                             self.print_node(i[1])
             elif needs_colon:
                 self.write(":")
-                self.wrote_colon = True
+                wrote_colon = True
             self.print_nodes(children_after_keywords, 0 if has_block else 1)
-        if atl_transform is not None and atl_printed is False:
+        if atl_transform is not None:
             # "at transform:", possibly preceded by other keywords, and followed by an ATL block
             # TODO this doesn't always go at the end. Use line numbers to figure out where it goes
-            self.print_atl_sl2(atl_transform)
-            
-    def print_atl_sl2(self, atl_transform):
-        if not self.wrote_colon and self.lineno is not None:
-            self.write(":")
-            self.wrote_colon = True
-        with self.increase_indent():
-            self.indent()
-            self.write("at transform:")
-            self.linenumber = self.print_atl_callback(self.linenumber, self.indent_level, atl_transform)
+            if not wrote_colon and lineno is not None:
+                self.write(":")
+                wrote_colon = True
+            with self.increase_indent():
+                self.indent()
+                self.write("at transform:")
+                self.linenumber = self.print_atl_callback(self.linenumber, self.indent_level, atl_transform)
