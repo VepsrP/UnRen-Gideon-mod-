@@ -768,7 +768,7 @@ class Decompiler(DecompilerBase):
                 self.write(" early")
             if ast.hide:
                 self.write(" hide")
-            if hasattr(ast, "store") and ast.store != "store":
+            if hasattr(ast, "store") and ast.store != "store" and ast.store != b"store":
                 self.write(" in ")
                 # Strip prepended "store."
                 self.write(ast.store[6:])
