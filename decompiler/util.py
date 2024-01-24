@@ -4,6 +4,7 @@ import re
 import traceback
 from io import StringIO
 from contextlib import contextmanager
+from collections import OrderedDict
 
 class DecompilerBase(object):
     def __init__(self, out_file=None, indentation='    ', printlock=None):
@@ -208,6 +209,30 @@ def reconstruct_paraminfo(paraminfo):
     rv = ["("]
 
     sep = First("", ", ")
+    positional_only = []
+    positional_or_keyword = []
+    var_positional = []
+    keyword_only = []
+    var_keyword = []
+    
+    if isinstance(paraminfo.parameters, OrderedDict):
+        for k, p in paraminfo.parameters.items():
+            if p.kind == 0:
+                positional_only.append(k)
+            if p.kind == 1:
+                if p.default is not None and p.default != 'None':
+                    keyword_only.append(k + "=" + p.default)
+                else:
+                    positional_or_keyword.append(k)
+            if p.kind == 2:
+                var_positional.append("*" + k)
+            if p.kind == 3:
+                if p.default is not None and p.default != 'None':
+                    keyword_only.append(k + "=" + p.default)
+            if p.kind == 4:
+                var_keyword.append("**" + k)
+        return "(" + ", ".join(positional_only + positional_or_keyword + var_positional+ keyword_only + var_keyword) + ")"
+
     positional = [i for i in paraminfo.parameters if i[0] in paraminfo.positional]
     nameonly = [i for i in paraminfo.parameters if i not in positional]
     for parameter in positional:
