@@ -217,15 +217,16 @@ def reconstruct_paraminfo(paraminfo):
     
     if isinstance(paraminfo.parameters, OrderedDict):
         for k, p in paraminfo.parameters.items():
-            if p.kind == 1:
+            if p.kind == 0:
                 positional_only.append(k)
-            if p.kind == 2:
+            if p.kind == 1:
                 positional_or_keyword.append(k)
-            if p.kind == 3:
+            if p.kind == 2:
                 var_positional.append("*" + k)
+            if p.kind == 3:
+                if p.default is not None and p.default != 'None':
+                    keyword_only.append(k + "=" + p.default)
             if p.kind == 4:
-                keyword_only.append(k + "=" + str(p.default))
-            if p.kind == 5:
                 var_keyword.append("**" + k)
         return "(" + ", ".join(positional_only + positional_or_keyword + var_positional+ keyword_only + var_keyword) + ")"
 

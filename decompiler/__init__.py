@@ -304,6 +304,30 @@ class Decompiler(DecompilerBase):
         self.indent()
         self.write("time %s" % ast.time)
 
+
+    @dispatch(renpy.atl.RawIf)
+    @dispatch(store.ATL.RawIf)
+    def print_atl_rawif(self, ast):
+        statement = First("if %s:", "elif %s:")
+
+        for i, (condition, block) in enumerate(ast.entries):
+
+            if((i > 0) and (i + 1) == len(ast.entries) and ((PY2 and not isinstance(condition, unicode)) or (PY3 and not isinstance(condition, str)) or condition == u'True')):
+                self.indent()
+                self.write("else:")
+            else:
+                if(hasattr(condition, 'linenumber')):
+                    self.advance_to_line(condition.linenumber)
+                self.indent()
+                self.write(statement() % condition)
+            self.print_nodes([block], 1)
+
+    @dispatch(renpy.atl.RawAction)
+    @dispatch(store.ATL.RawAction)
+    def print_atl_rawif(self, ast):
+        self.indent()
+        self.write(ast.expr)
+
     # Displayable related functions
 
     def print_imspec(self, imspec):
