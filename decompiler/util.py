@@ -220,7 +220,10 @@ def reconstruct_paraminfo(paraminfo):
             if p.kind == 0:
                 positional_only.append(k)
             if p.kind == 1:
-                positional_or_keyword.append(k)
+                if p.default is not None and p.default != 'None':
+                    keyword_only.append(k + "=" + p.default)
+                else:
+                    positional_or_keyword.append(k)
             if p.kind == 2:
                 var_positional.append("*" + k)
             if p.kind == 3:
