@@ -67,7 +67,6 @@ if exist "lib\windows-x86_64\python.exe" (
 )
 if exist "lib\py2-windows-x86_64\python.exe" (
 	if not "%PROCESSOR_ARCHITECTURE%"=="x86" (
-		echo "check1"
 		set "pythondir=%cd%\lib\py2-windows-x86_64\"
     ) else if exist "lib\py2-windows-i686\python.exe" (
 		set "pythondir=%cd%\lib\py2-windows-i686\"

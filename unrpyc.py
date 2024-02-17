@@ -129,6 +129,76 @@ class RevertableSet(magic.FakeStrict, set):
         else:
             self.update(state)
 
+class RScriptArguments(magic.FakeStrict, dict):
+    __module__ = "store"
+    def __new__(cls):
+        return dict.__new__(cls)
+    
+    def is_num(s):
+        try:
+            if "_" in s:
+                return False
+            
+            int(s)
+            return True
+        except ValueError:
+            return False
+    
+    def __getattr__(self, name):
+        if name in self:
+            value = self[name]
+            if isinstance(value, (int, float)):
+                return value
+            
+            if self.is_num(value):
+                return int(value, 10)
+            else:
+                try:
+                    if isinstance(value, basestring) and value.startswith("engine.rscript."):
+                        value = value[len("engine.rscript."):]
+                    
+                    return eval(value)
+                except:
+                    return value
+        else:
+            raise AttributeError("RScript argument %s not defined." % name)
+            return 0
+    
+    def __setattr__(self, name, value):
+        self[name] = value
+    
+    def __delattr__(self, name):
+        if name in self:
+            del self[name]
+        else:
+            raise AttributeError("RScript argument %s not defined." % name)
+        
+class KirikiriStorage(dict):
+    __module__ = "store.engine.krkr"
+    def __new__(cls):
+        return dict.__new__(cls)    
+        
+    def __getattr__(self, name):
+        if name in self:
+            return self[name]
+        else:
+            raise AttributeError("Kirikiri argument %s not defined." % name)
+    
+    def __setattr__(self, name, value):
+        self[name] = value
+    
+    def __delattr__(self, name):
+        if name in self:
+            del self[name]
+        else:
+            raise AttributeError("Kirikiri argument %s not defined." % name)
+    
+    def __add__(self, args):
+        merged = KirikiriStorage()
+        merged.update(self)
+        merged.update(args)
+        return merged
+
 class Sentinel(magic.FakeStrict, object):
     __module__ = "renpy.object"
     def __new__(cls, name):
@@ -143,23 +213,34 @@ class set(magic.FakeStrict, object):
         obj.name = name
         return obj
 
-class_factory3 = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
-RevertableList.__module__ = "renpy.python"
-RevertableDict.__module__ = "renpy.python"
-RevertableSet.__module__ = "renpy.python"
-class_factory2 = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set), magic.FakeStrict)
+class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set, RScriptArguments, KirikiriStorage), magic.FakeStrict)
 
 def revertable_switch(raw_dat):
     global class_factory
-    try:
-        data, stmts = magic.safe_loads(raw_dat, class_factory2, {"_ast", "collections"})
+    finish = False
+    while not finish:
+        try:
+            data, stmts = magic.safe_loads(raw_dat, class_factory, {"_ast", "collections"})
+            finish = True
 
-    except (TypeError, AttributeError) as err:
-        if 'Revertable' in err.args[0]:
-            data, stmts = magic.safe_loads(raw_dat, class_factory3, {"_ast", "collections"})
-    except Exception:
-        with printlock:
-            print(traceback.format_exc())
+        except (TypeError, AttributeError) as err:
+            if ("revertable" in err.args[0] or "Revertable" in err.args[0]):
+                if RevertableList.__module__ == "renpy.python":
+                    RevertableList.__module__ = "renpy.revertable"
+                    RevertableDict.__module__ = "renpy.revertable"
+                    RevertableSet.__module__ = "renpy.revertable"
+                else:
+                    RevertableList.__module__ = "renpy.python"
+                    RevertableDict.__module__ = "renpy.python"
+                    RevertableSet.__module__ = "renpy.python"
+            elif ("RScriptArguments") in err.args[0]:
+                RScriptArguments.__module__ = "store.engine.rscript"
+            else:
+                print(err.message)
+            class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set, RScriptArguments, KirikiriStorage), magic.FakeStrict)
+        except Exception:
+            print(err.message)
+            break
     return data, stmts
 
 printlock = Lock()

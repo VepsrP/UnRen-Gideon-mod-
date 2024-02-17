@@ -411,7 +411,7 @@ class SL2Decompiler(DecompilerBase):
         if atl_transform is not None:
             # "at transform:", possibly preceded by other keywords, and followed by an ATL block
             # TODO this doesn't always go at the end. Use line numbers to figure out where it goes
-            if not wrote_colon and lineno is not None:
+            if not wrote_colon and lineno is not None and not has_block:
                 self.write(":")
                 wrote_colon = True
             with self.increase_indent():
