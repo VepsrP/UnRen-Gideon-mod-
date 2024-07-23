@@ -123,7 +123,7 @@ def extract_slot_headerscan(f, slot):
     while position + 36 < len(data):
         a,b,c,d,e,f,g,h,i = struct.unpack("<IIIIIIIII", data[position : position + 36])
         if a == 1 and d == 2 and g == 0 and b + c == e:
-            break;
+            break
         position += 1
 
     else:
