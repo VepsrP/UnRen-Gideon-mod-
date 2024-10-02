@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-# Copyright (c) 2012 Yuri K. Schlesner
+# Copyright (c) 2012-2024 Yuri K. Schlesner, CensoredUsername, Jackmcbarn
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,463 +19,548 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
+
+__title__ = "Unrpyc"
+__version__ = 'v2.0.2'
+__url__ = "https://github.com/CensoredUsername/unrpyc"
+
+
 import argparse
-import sys
-from os import path, walk
 import glob
-import codecs
-import itertools
-import traceback
 import struct
-import inspect
-from operator import itemgetter
-sys.path.append('..')
-PY2 = sys.version_info < (3, 0)
+import sys
+import traceback
+import zlib
+from pathlib import Path
 
 try:
-    import main
-except:
-    pass
-
-import renpy.object
-
-try:
-    import renpy.config
-    from renpy.loader import YVANeusEX
-except:
-    pass
-
-from renpy import script
-if(hasattr(script, 'RPYC2_HEADER')):
-    RPYC_Header = script.RPYC2_HEADER
-
+    from multiprocessing import Pool, cpu_count
+except ImportError:
     # Mock required support when multiprocessing is unavailable
-def cpu_count():
-    return 1
-
-class Lock:
-    def __enter__(self):
-        pass
-    def __exit__(self, type, value, traceback):
-        pass
-    def acquire(self, block=True, timeout=None):
-        pass
-    def release(self):
-        pass
+    def cpu_count():
+        return 1
 
 import decompiler
-from decompiler import magic, astdump, translate, util
-
-# special definitions for special classes
-if(not PY2):
-    class PyExpr(magic.FakeStrict, str):
-        __module__ = "renpy.ast"
-        def __new__(cls, s, filename, linenumber, py=None):
-            self = str.__new__(cls, s)
-            self.filename = filename
-            self.linenumber = linenumber
-            self.py = py
-            return self
-
-        def __getnewargs__(self):
-            if self.py is not None:
-                return str(self), self.filename, self.linenumber, self.py
-            else:
-                return str(self), self.filename, self.linenumber
-else:
-    class PyExpr(magic.FakeStrict, unicode):
-        __module__ = "renpy.ast"
-        def __new__(cls, s, filename, linenumber, py=None):
-            self = unicode.__new__(cls, s)
-            self.filename = filename
-            self.linenumber = linenumber
-            self.py = py
-            return self
-
-        def __getnewargs__(self):
-            if self.py is not None:
-                return unicode(self), self.filename, self.linenumber, self.py
-            else:
-                return unicode(self), self.filename, self.linenumber
-
-class PyCode(magic.FakeStrict):
-    __module__ = "renpy.ast"
-    def __setstate__(self, state):
-        if len(state) == 4:
-            (_, self.source, self.location, self.mode) = state
-            self.py = None
-        else:
-            (_, self.source, self.location, self.mode, self.py) = state
-        self.bytecode = None
-
-class RevertableList(magic.FakeStrict, list):
-    __module__ = "renpy.revertable"
-    def __new__(cls):
-        return list.__new__(cls)
-
-class RevertableDict(magic.FakeStrict, dict):
-    __module__ = "renpy.revertable"
-    def __new__(cls):
-        return dict.__new__(cls)
-
-class RevertableSet(magic.FakeStrict, set):
-    __module__ = "renpy.revertable"
-    def __new__(cls):
-        return set.__new__(cls)
-
-    def __setstate__(self, state):
-        if isinstance(state, tuple):
-            self.update(state[0].keys())
-        else:
-            self.update(state)
-
-class RScriptArguments(magic.FakeStrict, dict):
-    __module__ = "store"
-    def __new__(cls):
-        return dict.__new__(cls)
-    
-    def is_num(s):
-        try:
-            if "_" in s:
-                return False
-            
-            int(s)
-            return True
-        except ValueError:
-            return False
-    
-    def __getattr__(self, name):
-        if name in self:
-            value = self[name]
-            if isinstance(value, (int, float)):
-                return value
-            
-            if self.is_num(value):
-                return int(value, 10)
-            else:
-                try:
-                    if isinstance(value, basestring) and value.startswith("engine.rscript."):
-                        value = value[len("engine.rscript."):]
-                    
-                    return eval(value)
-                except:
-                    return value
-        else:
-            raise AttributeError("RScript argument %s not defined." % name)
-            return 0
-    
-    def __setattr__(self, name, value):
-        self[name] = value
-    
-    def __delattr__(self, name):
-        if name in self:
-            del self[name]
-        else:
-            raise AttributeError("RScript argument %s not defined." % name)
-        
-class KirikiriStorage(dict):
-    __module__ = "store.engine.krkr"
-    def __new__(cls):
-        return dict.__new__(cls)    
-        
-    def __getattr__(self, name):
-        if name in self:
-            return self[name]
-        else:
-            raise AttributeError("Kirikiri argument %s not defined." % name)
-    
-    def __setattr__(self, name, value):
-        self[name] = value
-    
-    def __delattr__(self, name):
-        if name in self:
-            del self[name]
-        else:
-            raise AttributeError("Kirikiri argument %s not defined." % name)
-    
-    def __add__(self, args):
-        merged = KirikiriStorage()
-        merged.update(self)
-        merged.update(args)
-        return merged
-
-class Sentinel(magic.FakeStrict, object):
-    __module__ = "renpy.object"
-    def __new__(cls, name):
-        obj = object.__new__(cls)
-        obj.name = name
-        return obj
-
-class set(magic.FakeStrict, object):
-    __module__ = "__builtin__"
-    def __new__(cls, name):
-        obj = object.__new__(cls)
-        obj.name = name
-        return obj
-
-class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set, RScriptArguments, KirikiriStorage), magic.FakeStrict)
-
-def revertable_switch(raw_dat):
-    global class_factory
-    finish = False
-    while not finish:
-        try:
-            data, stmts = magic.safe_loads(raw_dat, class_factory, {"_ast", "collections"})
-            finish = True
-
-        except (TypeError, AttributeError) as err:
-            if ("revertable" in err.args[0] or "Revertable" in err.args[0]):
-                if RevertableList.__module__ == "renpy.python":
-                    RevertableList.__module__ = "renpy.revertable"
-                    RevertableDict.__module__ = "renpy.revertable"
-                    RevertableSet.__module__ = "renpy.revertable"
-                else:
-                    RevertableList.__module__ = "renpy.python"
-                    RevertableDict.__module__ = "renpy.python"
-                    RevertableSet.__module__ = "renpy.python"
-            elif ("RScriptArguments") in err.args[0]:
-                RScriptArguments.__module__ = "store.engine.rscript"
-            else:
-                print(err.message)
-            class_factory = magic.FakeClassFactory((frozenset, PyExpr, PyCode, RevertableList, RevertableDict, RevertableSet, Sentinel, set, RScriptArguments, KirikiriStorage), magic.FakeStrict)
-        except Exception:
-            print(err.message)
-            break
-    return data, stmts
-
-printlock = Lock()
-
-# needs class_factory
 import deobfuscate
+from decompiler import astdump, translate
+from decompiler.renpycompat import (pickle_safe_loads, pickle_safe_dumps, pickle_loads,
+                                    pickle_detect_python2)
+
+
+class Context:
+    def __init__(self):
+        # list of log lines to print
+        self.log_contents = []
+
+        # any exception that occurred
+        self.error = None
+
+        # state of what case was encountered
+        # options:
+        #     error:      (default) an unexpected exception was raised
+        #     ok:         the process concluded successfully
+        #     bad_header: the given file cannot be parsed as a normal rpyc file
+        #     skip:       the given file was skipped due to a preexisting output file
+        self.state = "error"
+
+        # return value from the worker, if any
+        self.value = None
+
+    def log(self, message):
+        self.log_contents.append(message)
+
+    def set_error(self, error):
+        self.error = error
+
+    def set_result(self, value):
+        self.value = value
+
+    def set_state(self, state):
+        self.state = state
+
+
+class BadRpycException(Exception):
+    """Exception raised when we couldn't parse the rpyc archive format"""
+    pass
+
 
 # API
 
-def read_ast_from_file(in_file):
-    # .rpyc files are just zlib compressed pickles of a tuple of some data and the actual AST of the file
-    global class_factory
+def read_ast_from_file(in_file, context):
+    # Reads rpyc v1 or v2 file
+    # v1 files are just a zlib compressed pickle blob containing some data and the ast
+    # v2 files contain a basic archive structure that can be parsed to find the same blob
     raw_contents = in_file.read()
-    if raw_contents[:len(RPYC_Header)] != RPYC_Header:
-            if slot != 1:
-                return None
-            in_file.seek(0)
-            return bytes(in_file.read())
-    if raw_contents.startswith(RPYC_Header):
+    file_start = raw_contents[:50]
+    is_rpyc_v1 = False
+
+    if not raw_contents.startswith(b"RENPY RPC2"):
+        # if the header isn't present, it should be a RPYC V1 file, which is just the blob
+        contents = raw_contents
+        is_rpyc_v1 = True
+
+    else:
         # parse the archive structure
-        position = len(RPYC_Header)
+        position = 10
         chunks = {}
-        while True:
+        have_errored = False
+
+        for expected_slot in range(1, 0xFFFFFFFF):
             slot, start, length = struct.unpack("III", raw_contents[position: position + 12])
+
             if slot == 0:
                 break
+
+            if slot != expected_slot and not have_errored:
+                have_errored = True
+
+                context.log(
+                    "Warning: Encountered an unexpected slot structure. It is possible the \n"
+                    "    file header structure has been changed.")
+
             position += 12
 
             chunks[slot] = raw_contents[start: start + length]
 
-        raw_contents = chunks
+        if 1 not in chunks:
+            context.set_state('bad_header')
+            raise BadRpycException(
+                "Unable to find the right slot to load from the rpyc file. The file header "
+                f"structure has been changed. File header: {file_start}")
 
-    if("YVANeusEX" in globals()):
-            raw_contents = YVANeusEX.encrypt(bytearray(raw_contents[1]), YVANeusEX.cipherkey, True) + YVANeusEX.encrypt(bytearray(raw_contents[2]), YVANeusEX.cipherkey, True)
-    elif(PY2):
-        raw_contents = raw_contents[1].decode('zlib')
-    else:
-        raw_contents = codecs.decode(raw_contents, encoding="zlib")
-    data, stmts = revertable_switch(raw_contents)
+        contents = chunks[1]
+
+    try:
+        contents = zlib.decompress(contents)
+    except Exception:
+        context.set_state('bad_header')
+        raise BadRpycException(
+            "Did not find a zlib compressed blob where it was expected. Either the header has been "
+            f"modified or the file structure has been changed. File header: {file_start}") from None
+
+    # add some detection of ren'py 7 files
+    if is_rpyc_v1 or pickle_detect_python2(contents):
+        version = "6" if is_rpyc_v1 else "7"
+
+        context.log(
+            "Warning: analysis found signs that this .rpyc file was generated by ren'py \n"
+           f'    version {version} or below, while this unrpyc version targets ren\'py \n'
+            "    version 8. Decompilation will still be attempted, but errors or incorrect \n"
+            "    decompilation might occur. ")
+
+    _, stmts = pickle_safe_loads(contents)
     return stmts
 
 
-def decompile_rpyc(input_filename, overwrite=False, dump=False, decompile_python=False,
-                   comparable=False, no_pyexpr=False, translator=None, tag_outside_block=False,
-                   init_offset=False, try_harder=False):
-    # Output filename is input filename but with .rpy extension
-    filepath, ext = path.splitext(input_filename)
-    if dump:
-        out_filename = filepath + ".txt"
-    elif ext == ".rpymc":
-        out_filename = filepath + ".rpym"
-    else:
-        out_filename = filepath + ".rpy"
-
-    with printlock:
-        print("Decompiling %s to %s..." % (input_filename, out_filename))
-
-        if not overwrite and path.exists(out_filename):
-            print("Output file already exists. Pass --clobber to overwrite.")
-            return False # Don't stop decompiling if one file already exists
-
-    with open(input_filename, 'rb') as in_file:
-        global class_factory
+def get_ast(in_file, try_harder, context):
+    """
+    Opens the rpyc file at path in_file to load the contained AST.
+    If try_harder is True, an attempt will be made to work around obfuscation techniques.
+    Else, it is loaded as a normal rpyc file.
+    """
+    with in_file.open('rb') as in_file:
         if try_harder:
-            ast = deobfuscate.read_ast(in_file)
+            ast = deobfuscate.read_ast(in_file, context)
         else:
-            if (not hasattr(script.Script, "read_rpyc_data") or inspect.ismethod(script.Script.read_rpyc_data)):
-                ast = read_ast_from_file(in_file)
-            else:
-                raw_contents = script.Script.read_rpyc_data(object, in_file, 1)
-                data, ast = revertable_switch(raw_contents)
+            ast = read_ast_from_file(in_file, context)
+    return ast
 
-    with codecs.open(out_filename, 'w', encoding='utf-8') as out_file:
+
+def decompile_rpyc(input_filename, context, overwrite=False, try_harder=False, dump=False,
+                   comparable=False, no_pyexpr=False, translator=None, init_offset=False,
+                   sl_custom_names=None):
+
+    # Output filename is input filename but with .rpy extension
+    if dump:
+        ext = '.txt'
+    elif input_filename.suffix == ('.rpyc'):
+        ext = '.rpy'
+    elif input_filename.suffix == ('.rpymc'):
+        ext = '.rpym'
+    out_filename = input_filename.with_suffix(ext)
+
+
+    if not overwrite and out_filename.exists():
+        context.log(f'Skipping {input_filename}. {out_filename.name} already exists.')
+        context.set_state('skip')
+        return
+
+    context.log(f'Decompiling {input_filename} to {out_filename.name} ...')
+    ast = get_ast(input_filename, try_harder, context)
+
+    with out_filename.open('w', encoding='utf-8') as out_file:
         if dump:
-            astdump.pprint(out_file, ast, decompile_python=decompile_python, comparable=comparable,
-                                        no_pyexpr=no_pyexpr)
+            astdump.pprint(out_file, ast, comparable=comparable, no_pyexpr=no_pyexpr)
         else:
-            decompiler.pprint(out_file, ast, decompile_python=decompile_python, printlock=printlock,
-                                            translator=translator, tag_outside_block=tag_outside_block,
-                                            init_offset=init_offset)
+            options = decompiler.Options(log=context.log_contents, translator=translator,
+                                         init_offset=init_offset, sl_custom_names=sl_custom_names)
 
-    return True
+            decompiler.pprint(out_file, ast, options)
 
-def extract_translations(input_filename, language):
-    with printlock:
-        print("Extracting translations from %s..." % input_filename)
+    context.set_state('ok')
 
-    with open(input_filename, 'rb') as in_file:
-        ast = read_ast_from_file(in_file)
 
-    translator = translate.Translator(language, True)
-    translator.translate_dialogue(ast)
-    # we pickle and unpickle this manually because the regular unpickler will choke on it
-    return magic.safe_dumps(translator.dialogue), translator.strings
+def worker_tl(arg_tup):
+    """
+    This file implements the first pass of the translation feature. It gathers TL-data from the
+    given rpyc files, to be used by the common worker to translate while decompiling.
+    arg_tup is (args, filename). Returns the gathered TL data in the context.
+    """
+    args, filename = arg_tup
+    context = Context()
 
-def worker(t):
-    (args, filename, filesize) = t
     try:
-        if args.write_translation_file:
-            return extract_translations(filename, args.language)
-        else:
-            if args.translation_file is not None:
-                translator = translate.Translator(None)
-                translator.language, translator.dialogue, translator.strings = magic.loads(args.translations, class_factory)
-            else:
-                translator = None
-            return decompile_rpyc(filename, args.clobber, args.dump, decompile_python=args.decompile_python,
-                                  no_pyexpr=args.no_pyexpr, comparable=args.comparable, translator=translator,
-                                  tag_outside_block=args.tag_outside_block, init_offset=args.init_offset, try_harder=args.try_harder)
+        context.log(f'Extracting translations from {filename}...')
+        ast = get_ast(filename, args.try_harder, context)
+
+        tl_inst = translate.Translator(args.translate, True)
+        tl_inst.translate_dialogue(ast)
+
+        # this object has to be sent back to the main process, for which it needs to be pickled.
+        # the default pickler cannot pickle fake classes correctly, so manually handle that here.
+        context.set_result(pickle_safe_dumps((tl_inst.dialogue, tl_inst.strings)))
+        context.set_state("ok")
+
     except Exception as e:
-        with printlock:
-            print("Error while decompiling %s:" % filename)
-            print(traceback.format_exc())
-        return False
+        context.set_error(e)
+        context.log(f'Error while extracting translations from {filename}:')
+        context.log(traceback.format_exc())
+
+    return context
+
+
+def worker_common(arg_tup):
+    """
+    The core of unrpyc. arg_tup is (args, filename). This worker will unpack the file at filename,
+    decompile it, and write the output to it's corresponding rpy file.
+    """
+
+    args, filename = arg_tup
+    context = Context()
+
+    if args.translator:
+        args.translator = pickle_loads(args.translator)
+
+    try:
+        decompile_rpyc(
+            filename, context, overwrite=args.clobber, try_harder=args.try_harder,
+            dump=args.dump, no_pyexpr=args.no_pyexpr, comparable=args.comparable,
+            init_offset=args.init_offset, sl_custom_names=args.sl_custom_names,
+            translator=args.translator)
+
+    except Exception as e:
+        context.set_error(e)
+        context.log(f'Error while decompiling {filename}:')
+        context.log(traceback.format_exc())
+
+    return context
+
+
+def run_workers(worker, common_args, private_args, parallelism):
+    """
+    Runs worker in parallel using multiprocessing, with a max of `parallelism` processes.
+    Workers are called as worker((common_args, private_args[i])).
+    Workers should return an instance of `Context` as return value.
+    """
+
+    worker_args = ((common_args, x) for x in private_args)
+
+    results = []
+    if parallelism > 1:
+        with Pool(parallelism) as pool:
+            for result in pool.imap(worker, worker_args, 1):
+                results.append(result)
+
+                for line in result.log_contents:
+                    print(line)
+
+                print("")
+
+    else:
+        for result in map(worker, worker_args):
+            results.append(result)
+
+            for line in result.log_contents:
+                print(line)
+
+            print("")
+
+    return results
+
+
+def parse_sl_custom_names(unparsed_arguments):
+    # parse a list of strings in the format
+    # classname=name-nchildren into {classname: (name, nchildren)}
+    parsed_arguments = {}
+    for argument in unparsed_arguments:
+        content = argument.split("=")
+        if len(content) != 2:
+            raise Exception(f'Bad format in custom sl displayable registration: "{argument}"')
+
+        classname, name = content
+        split = name.split("-")
+        if len(split) == 1:
+            amount = "many"
+
+        elif len(split) == 2:
+            name, amount = split
+            if amount == "0":
+                amount = 0
+            elif amount == "1":
+                amount = 1
+            elif amount == "many":
+                pass
+            else:
+                raise Exception(
+                    f'Bad child node count in custom sl displayable registration: "{argument}"')
+
+        else:
+            raise Exception(
+                f'Bad format in custom sl displayable registration: "{argument}"')
+
+        parsed_arguments[classname] = (name, amount)
+
+    return parsed_arguments
+
+
+def plural_s(n, unit):
+    """Correctly uses the plural form of 'unit' when 'n' is not one"""
+    return f"1 {unit}" if n == 1 else f"{n} {unit}s"
+
 
 def main():
-    # python27 unrpyc.py [-c] [-d] [--python-screens|--ast-screens|--no-screens] file [file ...]
-    parser = argparse.ArgumentParser(description="Decompile .rpyc/.rpymc files")
+    if not sys.version_info[:2] >= (3, 9):
+        raise Exception(
+            f"'{__title__} {__version__}' must be executed with Python 3.9 or later.\n"
+            f"You are running {sys.version}")
 
-    parser.add_argument('-c', '--clobber', dest='clobber', action='store_true',
-                        help="overwrites existing output files")
+    # argparse usage: python3 unrpyc.py [-c] [--try-harder] [-d] [-p] file [file ...]
+    cc_num = cpu_count()
+    ap = argparse.ArgumentParser(description="Decompile .rpyc/.rpymc files")
 
-    parser.add_argument('-d', '--dump', dest='dump', action='store_true',
-                        help="instead of decompiling, pretty print the ast to a file")
+    ap.add_argument(
+        'file',
+        type=str,
+        nargs='+',
+        help="The filenames to decompile. "
+        "All .rpyc files in any sub-/directories passed will also be decompiled.")
 
-    parser.add_argument('-t', '--translation-file', dest='translation_file', action='store', default=None,
-                        help="use the specified file to translate during decompilation")
+    ap.add_argument(
+        '-c',
+        '--clobber',
+        dest='clobber',
+        action='store_true',
+        help="Overwrites output files if they already exist.")
 
-    parser.add_argument('-T', '--write-translation-file', dest='write_translation_file', action='store', default=None,
-                        help="store translations in the specified file instead of decompiling")
+    ap.add_argument(
+        '--try-harder',
+        dest="try_harder",
+        action="store_true",
+        help="Tries some workarounds against common obfuscation methods. This is a lot slower.")
 
-    parser.add_argument('-l', '--language', dest='language', action='store', default='english',
-                        help="if writing a translation file, the language of the translations to write")
+    ap.add_argument(
+        '-p',
+        '--processes',
+        dest='processes',
+        action='store',
+        type=int,
+        choices=list(range(1, cc_num)),
+        default=cc_num - 1 if cc_num > 2 else 1,
+        help="Use the specified number or processes to decompile. "
+        "Defaults to the amount of hw threads available minus one, disabled when muliprocessing "
+        "unavailable is.")
 
-    parser.add_argument('--sl1-as-python', dest='decompile_python', action='store_true',
-                        help="Only dumping and for decompiling screen language 1 screens. "
-                        "Convert SL1 Python AST to Python code instead of dumping it or converting it to screenlang.")
+    astdump = ap.add_argument_group('astdump options', 'All unrpyc options related to ast-dumping.')
+    astdump.add_argument(
+        '-d',
+        '--dump',
+        dest='dump',
+        action='store_true',
+        help="Instead of decompiling, pretty print the ast to a file")
 
-    parser.add_argument('--comparable', dest='comparable', action='store_true',
-                        help="Only for dumping, remove several false differences when comparing dumps. "
-                        "This suppresses attributes that are different even when the code is identical, such as file modification times. ")
+    astdump.add_argument(
+        '--comparable',
+        dest='comparable',
+        action='store_true',
+        help="Only for dumping, remove several false differences when comparing dumps. "
+        "This suppresses attributes that are different even when the code is identical, such as "
+        "file modification times. ")
 
-    parser.add_argument('--no-pyexpr', dest='no_pyexpr', action='store_true',
-                        help="Only for dumping, disable special handling of PyExpr objects, instead printing them as strings. "
-                        "This is useful when comparing dumps from different versions of Ren'Py. "
-                        "It should only be used if necessary, since it will cause loss of information such as line numbers.")
+    astdump.add_argument(
+        '--no-pyexpr',
+        dest='no_pyexpr',
+        action='store_true',
+        help="Only for dumping, disable special handling of PyExpr objects, instead printing them "
+        "as strings. This is useful when comparing dumps from different versions of Ren'Py. It "
+        "should only be used if necessary, since it will cause loss of information such as line "
+        "numbers.")
 
-    parser.add_argument('--tag-outside-block', dest='tag_outside_block', action='store_true',
-                        help="Always put SL2 'tag's on the same line as 'screen' rather than inside the block. "
-                        "This will break compiling with Ren'Py 7.3 and above, but is needed to get correct line numbers "
-                        "from some files compiled with older Ren'Py versions.")
+    ap.add_argument(
+        '--no-init-offset',
+        dest='init_offset',
+        action='store_false',
+        help="By default, unrpyc attempt to guess when init offset statements were used and insert "
+        "them. This is always safe to do for ren'py 8, but as it is based on a heuristic it can be "
+        "disabled. The generated code is exactly equivalent, only slightly more cluttered.")
 
-    parser.add_argument('--init-offset', dest='init_offset', action='store_true',
-                        help="Attempt to guess when init offset statements were used and insert them. "
-                        "This is always safe to enable if the game's Ren'Py version supports init offset statements, "
-                        "and the generated code is exactly equivalent, only less cluttered.")
+    ap.add_argument(
+        '--register-sl-displayable',
+        dest="sl_custom_names",
+        type=str,
+        nargs='+',
+        help="Accepts mapping separated by '=', "
+        "where the first argument is the name of the user-defined displayable object, "
+        "and the second argument is a string containing the name of the displayable, "
+        "potentially followed by a '-', and the amount of children the displayable takes"
+        "(valid options are '0', '1' or 'many', with 'many' being the default)")
 
-    parser.add_argument('file', type=str, nargs='+',
-                        help="The filenames to decompile. "
-                        "All .rpyc files in any directories passed or their subdirectories will also be decompiled.")
+    ap.add_argument(
+        '-t',
+        '--translate',
+        dest='translate',
+        type=str,
+        action='store',
+        help="Changes the dialogue language in the decompiled script files, using a translation "
+        "already present in the tl dir.")
 
-    parser.add_argument('--try-harder', dest="try_harder", action="store_true",
-                        help="Tries some workarounds against common obfuscation methods. This is a lot slower.")
+    ap.add_argument(
+        '--version',
+        action='version',
+        version=f"{__title__} {__version__}")
 
-    args = parser.parse_args()
+    args = ap.parse_args()
 
-    if args.write_translation_file and not args.clobber and path.exists(args.write_translation_file):
-        # Fail early to avoid wasting time going through the files
-        print("Output translation file already exists. Pass --clobber to overwrite.")
-        return
+    # Catch impossible arg combinations so they don't produce strange errors or fail silently
+    if (args.no_pyexpr or args.comparable) and not args.dump:
+        ap.error("Options '--comparable' and '--no_pyexpr' require '--dump'.")
 
-    if args.translation_file:
-        with open(args.translation_file, 'rb') as in_file:
-            args.translations = in_file.read()
-    # Expand wildcards
-    def glob_or_complain(s):
-        retval = glob.glob(s)
+    if args.dump and args.translate:
+        ap.error("Options '--translate' and '--dump' cannot be used together.")
+
+    if args.sl_custom_names is not None:
+        try:
+            args.sl_custom_names = parse_sl_custom_names(args.sl_custom_names)
+        except Exception as e:
+            print("\n".join(e.args))
+            return
+
+    def glob_or_complain(inpath):
+        """Expands wildcards and casts output to pathlike state."""
+        retval = [Path(elem).resolve(strict=True) for elem in glob.glob(inpath, recursive=True)]
         if not retval:
-            print("File not found: " + s)
+            print(f'Input path not found: {inpath}')
         return retval
 
-    for index, item in enumerate(args.file):
-        args.file[index] = item.replace("\"", "")
-    filesAndDirs = list(map(glob_or_complain, args.file))
-    # Concatenate lists
-    filesAndDirs = list(itertools.chain(*filesAndDirs))
+    def traverse(inpath):
+        """
+        Filters from input path for rpyc/rpymc files and returns them. Recurses into all given
+        directories by calling itself.
+        """
+        if inpath.is_file() and inpath.suffix in ['.rpyc', '.rpymc']:
+            yield inpath
+        elif inpath.is_dir():
+            for item in inpath.iterdir():
+                yield from traverse(item)
 
-    # Recursively add .rpyc files from any directories passed
-    files = []
-    for i in filesAndDirs:
-        if path.isdir(i):
-            for dirpath, dirnames, filenames in walk(i):
-                files.extend(path.join(dirpath, j) for j in filenames if len(j) >= 5 and j.endswith(('.rpyc', '.rpymc', '.rpypig')))
-        else:
-            files.append(i)
+    # Check paths from argparse through globing and pathlib. Constructs a tasklist with all
+    # `Ren'Py compiled files` the app was assigned to process.
+    worklist = []
+    for entry in args.file:
+        for globitem in glob_or_complain(entry):
+            for elem in traverse(globitem):
+                worklist.append(elem)
 
-    # Check if we actually have files. Don't worry about
-    # no parameters passed, since ArgumentParser catches that
-    if len(files) == 0:
-        print("No script files to decompile.")
+    # Check if we actually have files. Don't worry about no parameters passed,
+    # since ArgumentParser catches that
+    if not worklist:
+        print("Found no script files to decompile.")
         return
 
-    files = list(map(lambda x: (args, x, path.getsize(x)), files))
+    if args.processes > len(worklist):
+        args.processes = len(worklist)
 
-    # Decompile in the order Ren'Py loads in
-    files = list(sorted(files, key=itemgetter(1), reverse=True))
-    results = list(map(worker, files))
+    print(f"Found {plural_s(len(worklist), 'file')} to process. "
+          f"Performing decompilation using {plural_s(args.processes, 'worker')}.")
 
-    if args.write_translation_file:
-        print("Writing translations to %s..." % args.write_translation_file)
-        translated_dialogue = {}
-        translated_strings = {}
-        good = 0
-        bad = 0
-        for result in results:
-            if not result:
-                bad += 1
-                continue
-            good += 1
-            translated_dialogue.update(magic.loads(result[0], class_factory))
-            translated_strings.update(result[1])
-        with open(args.write_translation_file, 'wb') as out_file:
-            magic.safe_dump((args.language, translated_dialogue, translated_strings), out_file)
+    # If a big file starts near the end, there could be a long time with only one thread running,
+    # which is inefficient. Avoid this by starting big files first.
+    worklist.sort(key=lambda x: x.stat().st_size, reverse=True)
 
-    else:
-        # Check per file if everything went well and report back
-        good = results.count(True)
-        bad = results.count(False)
+    translation_errors = 0
+    args.translator = None
+    if args.translate:
+        # For translation, we first need to analyse all files for translation data.
+        # We then collect all of these back into the main process, and build a
+        # datastructure of all of them. This datastructure is then passed to
+        # all decompiling processes.
+        # Note: because this data contains some FakeClasses, Multiprocessing cannot
+        # pass it between processes (it pickles them, and pickle will complain about
+        # these). Therefore, we need to manually pickle and unpickle it.
 
-    if bad == 0:
-        print("Decompilation of %d script file%s successful" % (good, 's' if good>1 else ''))
-    elif good == 0:
-        print("Decompilation of %d file%s failed" % (bad, 's' if bad>1 else ''))
-    else:
-        print("Decompilation of %d file%s successful, but decompilation of %d file%s failed" % (good, 's' if good>1 else '', bad, 's' if bad>1 else ''))
+        print("Step 1: analysing files for translations.")
+        results = run_workers(worker_tl, args, worklist, args.processes)
+
+        print('Compiling extracted translations.')
+        tl_dialogue = {}
+        tl_strings = {}
+        for entry in results:
+            if entry.state != "ok":
+                translation_errors += 1
+
+            if entry.value:
+                new_dialogue, new_strings = pickle_loads(entry.value)
+                tl_dialogue.update(new_dialogue)
+                tl_strings.update(new_strings)
+
+        translator = translate.Translator(None)
+        translator.dialogue = tl_dialogue
+        translator.strings = tl_strings
+        args.translator = pickle_safe_dumps(translator)
+
+        print("Step 2: decompiling.")
+
+    results = run_workers(worker_common, args, worklist, args.processes)
+
+    success = sum(result.state == "ok" for result in results)
+    skipped = sum(result.state == "skip" for result in results)
+    failed = sum(result.state == "error" for result in results)
+    broken = sum(result.state == "bad_header" for result in results)
+
+    print("")
+    print(f"{55 * '-'}")
+    print(f"{__title__} {__version__} results summary:")
+    print(f"{55 * '-'}")
+    print(f"Processed {plural_s(len(results), 'file')}.")
+
+    print(f"> {plural_s(success, 'file')} were successfully decompiled.")
+
+    if broken:
+        print(f"> {plural_s(broken, 'file')} did not have the correct header, "
+              "these were ignored.")
+
+    if failed:
+        print(f"> {plural_s(failed, 'file')} failed to decompile due to errors.")
+
+    if skipped:
+        print(f"> {plural_s(skipped, 'file')} were skipped as the output file already existed.")
+
+    if translation_errors:
+        print(f"> {plural_s(translation_errors, 'file')} failed translation extraction.")
+
+
+    if skipped:
+        print("")
+        print("To overwrite existing files instead of skipping them, use the --clobber flag.")
+
+    if broken:
+        print("")
+        print("To attempt to bypass modifications to the file header, use the --try-harder flag.")
+
+    if failed:
+        print("")
+        print("Errors were encountered during decompilation. Check the log for more information.")
+        print("When making a bug report, please include this entire log.")
 
 if __name__ == '__main__':
     main()

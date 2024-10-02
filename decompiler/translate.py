@@ -17,14 +17,14 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-import sys
+
+from .util import say_get_code
 import renpy
+
 import hashlib
 from copy import copy
-if(sys.version_info < (3, 0)): import util
-else: from . import util
 
-class Translator(object):
+class Translator:
     def __init__(self, language, saving_translations=False):
         self.language = language
         self.saving_translations = saving_translations
@@ -51,25 +51,25 @@ class Translator(object):
                 break
 
             i += 1
-            suffix = "_{0}".format(i)
+            suffix = f'_{i}'
 
         return identifier
 
     # Adapted from Ren'Py's Restructurer.create_translate
     def create_translate(self, block):
         if self.saving_translations:
-            return [] # Doesn't matter, since we're throwing this away in this case
+            return []  # Doesn't matter, since we're throwing this away in this case
 
         md5 = hashlib.md5()
 
         for i in block:
             if isinstance(i, renpy.ast.Say):
-                code = util.say_get_code(i)
+                code = say_get_code(i)
             elif isinstance(i, renpy.ast.UserStatement):
                 code = i.line
             else:
-                raise Exception("Don't know how to get canonical code for a %s" % str(type(i)))
-            md5.update(code.encode("bytes") + "\r\n")
+                raise Exception(f'Don\'t know how to get canonical code for a {type(i)!s}')
+            md5.update(code.encode("utf-8") + b"\r\n")
 
         digest = md5.hexdigest()[:8]
 
@@ -97,7 +97,9 @@ class Translator(object):
         return new_block
 
     def walk(self, ast, f):
-        if isinstance(ast, (renpy.ast.Init, renpy.ast.Label, renpy.ast.While, renpy.ast.Translate, renpy.ast.TranslateBlock)):
+        if isinstance(
+            ast, (renpy.ast.Init, renpy.ast.Label, renpy.ast.While, renpy.ast.Translate,
+                  renpy.ast.TranslateBlock)):
             f(ast.block)
         elif isinstance(ast, renpy.ast.Menu):
             for i in ast.items:
@@ -109,8 +111,8 @@ class Translator(object):
 
     # Adapted from Ren'Py's Restructurer.callback
     def translate_dialogue(self, children):
-        new_children = [ ]
-        group = [ ]
+        new_children = []
+        group = []
 
         for i in children:
 
@@ -122,7 +124,8 @@ class Translator(object):
                         self.label = i.name
                         self.alternate = None
 
-            if self.saving_translations and isinstance(i, renpy.ast.TranslateString) and i.language == self.language:
+            if self.saving_translations and isinstance(
+                    i, renpy.ast.TranslateString) and i.language == self.language:
                 self.strings[i.old] = i.new
 
             if not isinstance(i, renpy.ast.Translate):
@@ -136,7 +139,7 @@ class Translator(object):
                 group.append(i)
                 tl = self.create_translate(group)
                 new_children.extend(tl)
-                group = [ ]
+                group = []
 
             elif hasattr(i, 'translatable') and i.translatable:
                 group.append(i)
@@ -145,13 +148,13 @@ class Translator(object):
                 if group:
                     tl = self.create_translate(group)
                     new_children.extend(tl)
-                    group = [ ]
+                    group = []
 
                 new_children.append(i)
 
         if group:
             nodes = self.create_translate(group)
             new_children.extend(nodes)
-            group = [ ]
+            group = []
 
         children[:] = new_children

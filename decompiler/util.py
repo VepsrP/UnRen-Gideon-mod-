@@ -1,22 +1,61 @@
-from __future__ import unicode_literals
+# Copyright (c) 2014-2024 CensoredUsername, Jackmcbarn
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software'), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
 import sys
 import re
-import traceback
 from io import StringIO
 from contextlib import contextmanager
-from collections import OrderedDict
 
-class DecompilerBase(object):
-    def __init__(self, out_file=None, indentation='    ', printlock=None):
-        self.out_file = out_file or sys.stdout
+
+class OptionBase:
+    def __init__(self, indentation="    ", log=None):
         self.indentation = indentation
-        self.skip_indent_until_write = False
-        self.printlock = printlock
+        self.log = [] if log is None else log
 
+
+class DecompilerBase:
+    def __init__(self, out_file=None, options=OptionBase()):
+        # the file object that the decompiler outputs to
+        self.out_file = out_file or sys.stdout
+        # Decompilation options
+        self.options = options
+        # the string we use for indentation
+        self.indentation = options.indentation
+
+
+        # properties used for keeping track of where we are
+        # the current line we're writing.
         self.linenumber = 0
+        # the indentation level we're at
+        self.indent_level = 0
+        # a boolean that can be set to make the next call to indent() not insert a newline and
+        # indent useful when a child node can continue on the same line as the parent node
+        # advance_to_line will also cancel this if it changes the lineno
+        self.skip_indent_until_write = False
 
+        # properties used for keeping track what level of block we're in
         self.block_stack = []
         self.index_stack = []
+
+        # storage for any stuff that can be emitted whenever we have a blank line
         self.blank_line_queue = []
 
     def dump(self, ast, indent_level=0, linenumber=1, skip_indent_until_write=False):
@@ -43,8 +82,7 @@ class DecompilerBase(object):
         """
         Shorthand method for writing `string` to the file
         """
-        if(sys.version_info < (3, 0)): string = unicode(string)
-        else: string = str(string)
+        string = str(string)
         self.linenumber += string.count('\n')
         self.skip_indent_until_write = False
         self.out_file.write(string)
@@ -64,8 +102,13 @@ class DecompilerBase(object):
         """
         Save our current state.
         """
-        state = (self.out_file, self.skip_indent_until_write, self.linenumber,
-            self.block_stack, self.index_stack, self.indent_level, self.blank_line_queue)
+        state = (self.out_file,
+                 self.skip_indent_until_write,
+                 self.linenumber,
+                 self.block_stack,
+                 self.index_stack,
+                 self.indent_level,
+                 self.blank_line_queue)
         self.out_file = StringIO()
         return state
 
@@ -81,13 +124,18 @@ class DecompilerBase(object):
         """
         Roll back to a saved state.
         """
-        (self.out_file, self.skip_indent_until_write, self.linenumber,
-            self.block_stack, self.index_stack, self.indent_level, self.blank_line_queue) = state
+        (self.out_file,
+         self.skip_indent_until_write,
+         self.linenumber,
+         self.block_stack,
+         self.index_stack,
+         self.indent_level,
+         self.blank_line_queue) = state
 
     def advance_to_line(self, linenumber):
         # If there was anything that we wanted to do as soon as we found a blank line,
         # try to do it now.
-        self.blank_line_queue = list(filter(lambda m: m(linenumber), self.blank_line_queue))
+        self.blank_line_queue = [m for m in self.blank_line_queue if m(linenumber)]
         if self.linenumber < linenumber:
             # Stop one line short, since the call to indent() will advance the last line.
             # Note that if self.linenumber == linenumber - 1, this will write the empty string.
@@ -120,7 +168,6 @@ class DecompilerBase(object):
 
             for i, node in enumerate(ast):
                 self.index_stack[-1] = i
-                node = convert_ast(node)
                 self.print_node(node)
 
             self.block_stack.pop()
@@ -141,27 +188,21 @@ class DecompilerBase(object):
         return self.block_stack[-2][self.index_stack[-2]]
 
     def print_debug(self, message):
-        if self.printlock:
-            self.printlock.acquire()
-        try:
-            print(message.encode('utf-8'))
-        finally:
-            if self.printlock:
-                self.printlock.release()
+        self.options.log.append(message)
 
     def write_failure(self, message):
         self.print_debug(message)
         self.indent()
-        self.write("pass # <<<COULD NOT DECOMPILE: %s>>>" % message)
+        self.write(f'pass # <<<COULD NOT DECOMPILE: {message}>>>')
 
     def print_unknown(self, ast):
         # If we encounter a placeholder note, print a warning and insert a placeholder
-        self.write_failure("Unknown AST node: %s" % str(type(ast)))
+        self.write_failure(f'Unknown AST node: {type(ast)!s}')
 
     def print_node(self, ast):
         raise NotImplementedError()
 
-class First(object):
+class First:
     # An often used pattern is that on the first item
     # of a loop something special has to be done. This class
     # provides an easy object which on the first access
@@ -178,116 +219,180 @@ class First(object):
         else:
             return self.no_value
 
-def convert_ast(ast):
-    if hasattr(ast, "__dict__"):
-        try:
-            temp = dict()
-            for key in ast.__dict__.keys():
-                temp[bytes.decode(key)] = ast.__dict__.get(key)
-            for attr in temp:
-                setattr(ast, attr, temp[attr])
-            if hasattr(ast, "children"):
-                if type(ast.children) == list:
-                    for i in ast.children:
-                        i = convert_ast(i)
-                else: ast.children = convert_ast(ast.children)
-            if hasattr(ast, "parameters"):
-                if type(ast.parameters) == list:
-                    for i in ast.parameters:
-                        i = convert_ast(i)
-                else: ast.parameters = convert_ast(ast.parameters)
-        except TypeError:
-            pass
-        except Exception:
-            print(traceback.format_exc())
-    return ast
-
 def reconstruct_paraminfo(paraminfo):
     if paraminfo is None:
         return ""
 
     rv = ["("]
-
     sep = First("", ", ")
-    positional_only = []
-    positional_or_keyword = []
-    var_positional = []
-    keyword_only = []
-    var_keyword = []
-    
-    if isinstance(paraminfo.parameters, OrderedDict):
-        for k, p in paraminfo.parameters.items():
-            if p.kind == 0:
-                positional_only.append(k)
-            if p.kind == 1:
-                if p.default is not None and p.default != 'None':
-                    keyword_only.append(k + "=" + p.default)
-                else:
-                    positional_or_keyword.append(k)
-            if p.kind == 2:
-                var_positional.append("*" + k)
-            if p.kind == 3:
-                if p.default is not None and p.default != 'None':
-                    keyword_only.append(k + "=" + p.default)
-            if p.kind == 4:
-                var_keyword.append("**" + k)
-        return "(" + ", ".join(positional_only + positional_or_keyword + var_positional+ keyword_only + var_keyword) + ")"
 
-    positional = [i for i in paraminfo.parameters if i[0] in paraminfo.positional]
-    nameonly = [i for i in paraminfo.parameters if i not in positional]
-    for parameter in positional:
-        rv.append(sep())
-        rv.append(parameter[0])
-        if parameter[1] is not None:
-            rv.append("=%s" % parameter[1])
-    if paraminfo.extrapos:
-        rv.append(sep())
-        rv.append("*%s" % paraminfo.extrapos)
-    if nameonly:
-        if not paraminfo.extrapos:
+    if hasattr(paraminfo, 'positional_only'):
+        # ren'py 7.5-7.6 and 8.0-8.1, a slightly changed variant of 7.4 and before
+
+        already_accounted = set(name for name, default in paraminfo.positional_only)
+        already_accounted.update(name for name, default in paraminfo.keyword_only)
+        other = [(name, default)
+                 for name, default in paraminfo.parameters
+                 if name not in already_accounted]
+
+        for name, default in paraminfo.positional_only:
+            rv.append(sep())
+            rv.append(name)
+            if default is not None:
+                rv.append("=")
+                rv.append(default)
+
+        if paraminfo.positional_only:
+            rv.append(sep())
+            rv.append('/')
+
+        for name, default in other:
+            rv.append(sep())
+            rv.append(name)
+            if default is not None:
+                rv.append("=")
+                rv.append(default)
+
+        if paraminfo.extrapos:
             rv.append(sep())
             rv.append("*")
-        for parameter in nameonly:
+            rv.append(paraminfo.extrapos)
+        elif paraminfo.keyword_only:
+            rv.append(sep())
+            rv.append("*")
+
+        for name, default in paraminfo.keyword_only:
+            rv.append(sep())
+            rv.append(name)
+            if default is not None:
+                rv.append("=")
+                rv.append(default)
+
+        if paraminfo.extrakw:
+            rv.append(sep())
+            rv.append("**")
+            rv.append(paraminfo.extrakw)
+
+    elif hasattr(paraminfo, 'extrapos'):
+        # ren'py 7.4 and below, python 2 style
+        positional = [i for i in paraminfo.parameters if i[0] in paraminfo.positional]
+        nameonly = [i for i in paraminfo.parameters if i not in positional]
+        for parameter in positional:
             rv.append(sep())
             rv.append(parameter[0])
             if parameter[1] is not None:
-                rv.append("=%s" % parameter[1])
-    if paraminfo.extrakw:
-        rv.append(sep())
-        rv.append("**%s" % paraminfo.extrakw)
+                rv.append(f'={parameter[1]}')
+        if paraminfo.extrapos:
+            rv.append(sep())
+            rv.append(f'*{paraminfo.extrapos}')
+        if nameonly:
+            if not paraminfo.extrapos:
+                rv.append(sep())
+                rv.append("*")
+            for parameter in nameonly:
+                rv.append(sep())
+                rv.append(parameter[0])
+                if parameter[1] is not None:
+                    rv.append(f'={parameter[1]}')
+        if paraminfo.extrakw:
+            rv.append(sep())
+            rv.append(f'**{paraminfo.extrakw}')
+
+    else:
+        # ren'py 7.7/8.2 and above.
+        # positional only, /, positional or keyword, *, keyword only, ***
+        # prescence of the / is indicated by positional only arguments being present
+        # prescence of the * (if no *args) are present is indicated by keyword only args
+        # being present.
+        state = 1  # (0 = positional only, 1 = pos/key, 2 = keyword only)
+
+        for parameter in paraminfo.parameters.values():
+            rv.append(sep())
+            if parameter.kind == 0:
+                # positional only
+                state = 0
+
+                rv.append(parameter.name)
+                if parameter.default is not None:
+                    rv.append(f'={parameter.default}')
+
+            else:
+                if state == 0:
+                    # insert the / if we had a positional only argument before.
+                    state = 1
+                    rv.append("/")
+                    rv.append(sep())
+
+                if parameter.kind == 1:
+                    # positional or keyword
+                    rv.append(parameter.name)
+                    if parameter.default is not None:
+                        rv.append(f'={parameter.default}')
+
+                elif parameter.kind == 2:
+                    # *positional
+                    state = 2
+                    rv.append(f'*{parameter.name}')
+
+                elif parameter.kind == 3:
+                    # keyword only
+                    if state == 1:
+                        # insert the * if we didn't have a *args before
+                        state = 2
+                        rv.append('*')
+                        rv.append(sep())
+
+                    rv.append(parameter.name)
+                    if parameter.default is not None:
+                        rv.append(f'={parameter.default}')
+
+                elif parameter.kind == 4:
+                    # **keyword
+                    state = 3
+                    rv.append(f'**{parameter.name}')
 
     rv.append(")")
 
     return "".join(rv)
 
 def reconstruct_arginfo(arginfo):
-    arginfo = convert_ast(arginfo)
     if arginfo is None:
         return ""
 
-    rv = []
-    for i, (name, val) in enumerate(arginfo.arguments):
+    rv = ["("]
+    sep = First("", ", ")
 
-        if(hasattr(arginfo, "starred_indexes") and hasattr(arginfo.starred_indexes.name, "__iter__") and i in arginfo.starred_indexes.name):
-            rv.append("*%s" % val)
-        elif(hasattr(arginfo, "doublestarred_indexes") and hasattr(arginfo.doublestarred_indexes.name, "__iter__") and i in arginfo.doublestarred_indexes.name):
-            rv.append("**%s" % val)
-        elif(hasattr(arginfo, "__starred_indexes__") and hasattr(arginfo.starred_indexes, "__iter__") and i in arginfo.starred_indexes):
-            rv.append("*%s" % val)
-        elif(hasattr(arginfo, "__doublestarred_indexes__") and hasattr(arginfo.doublestarred_indexes, "__iter__") and i in arginfo.doublestarred_indexes):
-            rv.append("**%s" % val)
-        elif name is not None:
-            rv.append("{}={}".format(name, val))
-        else:
+    if hasattr(arginfo, 'starred_indexes'):
+        # ren'py 7.5 and above, PEP 448 compliant
+        for i, (name, val) in enumerate(arginfo.arguments):
+            rv.append(sep())
+            if name is not None:
+                rv.append(f'{name}=')
+            elif i in arginfo.starred_indexes:
+                rv.append('*')
+            elif i in arginfo.doublestarred_indexes:
+                rv.append('**')
             rv.append(val)
-    if hasattr(arginfo, 'extrapos') and arginfo.extrapos:
-        rv.append("*%s" % arginfo.extrapos)
-    if hasattr(arginfo, 'extrakw') and arginfo.extrakw:
-        rv.append("**%s" % arginfo.extrakw)
 
-    return "(" + ", ".join(rv) + ")"
+    else:
+        # ren'py 7.4 and below, python 2 style
+        for (name, val) in arginfo.arguments:
+            rv.append(sep())
+            if name is not None:
+                rv.append(f'{name}=')
+            rv.append(val)
+        if arginfo.extrapos:
+            rv.append(sep())
+            rv.append(f'*{arginfo.extrapos}')
+        if arginfo.extrakw:
+            rv.append(sep())
+            rv.append(f'**{arginfo.extrakw}')
 
-def string_escape(s): # TODO see if this needs to work like encode_say_string elsewhere
+    rv.append(")")
+
+    return "".join(rv)
+
+def string_escape(s):  # TODO see if this needs to work like encode_say_string elsewhere
     s = s.replace('\\', '\\\\')
     s = s.replace('"', '\\"')
     s = s.replace('\n', '\\n')
@@ -298,7 +403,7 @@ def string_escape(s): # TODO see if this needs to work like encode_say_string el
 KEYWORDS = set(['$', 'as', 'at', 'behind', 'call', 'expression', 'hide',
                 'if', 'in', 'image', 'init', 'jump', 'menu', 'onlayer',
                 'python', 'return', 'scene', 'set', 'show', 'with',
-                'while', 'zorder', 'transform', 'RPY'])
+                'while', 'zorder', 'transform'])
 
 word_regexp = '[a-zA-Z_\u00a0-\ufffd][0-9a-zA-Z_\u00a0-\ufffd]*'
 
@@ -306,7 +411,7 @@ def simple_expression_guard(s):
     # Some things we deal with are supposed to be parsed by
     # ren'py's Lexer.simple_expression but actually cannot
     # be parsed by it. figure out if this is the case
-    # a slightly more naive approach woudl be to check
+    # a slightly more naive approach would be to check
     # for spaces in it and surround it with () if necessary
     # but we're not naive
     s = s.strip()
@@ -314,12 +419,12 @@ def simple_expression_guard(s):
     if Lexer(s).simple_expression():
         return s
     else:
-        return "(%s)" % s
+        return f'({s})'
 
 def split_logical_lines(s):
     return Lexer(s).split_logical_lines()
 
-class Lexer(object):
+class Lexer:
     # special lexer for simple_expressions the ren'py way
     # false negatives aren't dangerous. but false positives are
     def __init__(self, string):
@@ -352,8 +457,8 @@ class Lexer(object):
 
     def python_string(self, clear_whitespace=True):
         # parse strings the ren'py way (don't parse docstrings, no b/r in front allowed)
-        # edit: now parses docstrings correctly. There was a degenerate case where '''string'string''' would
-        # result in issues
+        # edit: now parses docstrings correctly. There was a degenerate case where
+        # '''string'string''' would result in issues
         if clear_whitespace:
             return self.match(r"""(u?(?P<a>"(?:"")?|'(?:'')?).*?(?<=[^\\])(?:\\\\)*(?P=a))""")
         else:
@@ -405,18 +510,15 @@ class Lexer(object):
         return word
 
     def simple_expression(self):
-        # test if the start string was a simple expression
-        start = self.pos
-
         # check if there's anything in here acctually
         if self.eol():
             return False
 
         # parse anything which can be called or have attributes requested
-        if not(self.python_string() or
-               self.number() or
-               self.container() or
-               self.name()):
+        if not (self.python_string()
+                or self.number()
+                or self.container()
+                or self.name()):
             return False
 
         while not self.eol():
@@ -451,7 +553,9 @@ class Lexer(object):
         while self.pos < self.length:
             c = self.string[self.pos]
 
-            if c == '\n' and not contained and (not self.pos or self.string[self.pos - 1] != '\\'):
+            if (c == '\n'
+                    and not contained
+                    and (not self.pos or self.string[self.pos - 1] != '\\')):
                 lines.append(self.string[startpos:self.pos])
                 # the '\n' is not included in the emitted line
                 self.pos += 1
@@ -475,7 +579,7 @@ class Lexer(object):
             if self.python_string(False):
                 continue
 
-            self.re(r'\w+| +|.') # consume a word, whitespace or one symbol
+            self.re(r'\w+| +|.')  # consume a word, whitespace or one symbol
 
         if self.pos != startpos:
             lines.append(self.string[startpos:])
@@ -491,18 +595,18 @@ class WordConcatenator(object):
         self.reorderable = reorderable
 
     def append(self, *args):
-        self.words.extend(filter(None, args))
+        self.words.extend(i for i in args if i)
 
     def join(self):
         if not self.words:
             return ''
         if self.reorderable and self.words[-1][-1] == ' ':
-            for i in xrange(len(self.words) - 1, -1, -1):
+            for i in range(len(self.words) - 1, -1, -1):
                 if self.words[i][-1] != ' ':
                     self.words.append(self.words.pop(i))
                     break
         last_word = self.words[-1]
-        self.words = list(map(lambda x: x[:-1] if x[-1] == ' ' else x, self.words[:-1]))
+        self.words = [x[:-1] if x[-1] == ' ' else x for x in self.words[:-1]]
         self.words.append(last_word)
         rv = (' ' if self.needs_space else '') + ' '.join(self.words)
         self.needs_space = rv[-1] != ' '
@@ -531,7 +635,7 @@ def encode_say_string(s):
 
 # Adapted from Ren'Py's Say.get_code
 def say_get_code(ast, inmenu=False):
-    rv = [ ]
+    rv = []
 
     if ast.who:
         rv.append(ast.who)
@@ -550,11 +654,21 @@ def say_get_code(ast, inmenu=False):
     if not ast.interact and not inmenu:
         rv.append("nointeract")
 
-    if ast.with_:
-        rv.append("with")
-        rv.append(ast.with_)
+    # explicit_identifier was only added in 7.7/8.2.
+    if hasattr(ast, 'explicit_identifier') and ast.explicit_identifier:
+        rv.append("id")
+        rv.append(ast.identifier)
+    # identifier was added in 7.4.1. But the way ren'py processed it
+    # means it doesn't stored it in the pickle unless explicitly set
+    elif hasattr(ast, 'identifier') and ast.identifier is not None:
+        rv.append("id")
+        rv.append(ast.identifier)
 
     if hasattr(ast, 'arguments') and ast.arguments is not None:
         rv.append(reconstruct_arginfo(ast.arguments))
+
+    if ast.with_:
+        rv.append("with")
+        rv.append(ast.with_)
 
     return " ".join(rv)

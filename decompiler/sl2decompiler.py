@@ -1,4 +1,4 @@
-# Copyright (c) 2014 CensoredUsername
+# Copyright (c) 2014-2024 CensoredUsername, Jackmcbarn
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,39 +18,34 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from __future__ import unicode_literals
-import sys
-from operator import itemgetter
-
 from .util import DecompilerBase, First, reconstruct_paraminfo, \
-                 reconstruct_arginfo, split_logical_lines, Dispatcher, convert_ast
+                  reconstruct_arginfo, split_logical_lines, Dispatcher
 
+from . import atldecompiler
 
 from renpy import ui, sl2
 from renpy.ast import PyExpr
 from renpy.text import text
 from renpy.sl2 import sldisplayables as sld
 from renpy.display import layout, behavior, im, motion, dragdrop, transform
-import store
 
 # Main API
 
-def pprint(out_file, ast, print_atl_callback, indent_level=0, linenumber=1,
-           skip_indent_until_write=False, printlock=None, tag_outside_block=False):
-    return SL2Decompiler(print_atl_callback, out_file, printlock=printlock, tag_outside_block=tag_outside_block).dump(
+def pprint(out_file, ast, options,
+           indent_level=0, linenumber=1, skip_indent_until_write=False):
+    return SL2Decompiler(out_file, options).dump(
         ast, indent_level, linenumber, skip_indent_until_write)
 
 # Implementation
 
 class SL2Decompiler(DecompilerBase):
     """
-    An object which handles the decompilation of renpy screen language 2 screens to a given stream
+    An object which handles the decompilation of renpy screen language 2 screens to a given
+    stream
     """
 
-    def __init__(self, print_atl_callback, out_file=None, indentation = '    ', printlock=None, tag_outside_block=False):
-        super(SL2Decompiler, self).__init__(out_file, indentation, printlock)
-        self.print_atl_callback = print_atl_callback
-        self.tag_outside_block = tag_outside_block
+    def __init__(self, out_file, options):
+        super(SL2Decompiler, self).__init__(out_file, options)
 
     # This dictionary is a mapping of Class: unbound_method, which is used to determine
     # what method to call for which slast class
@@ -65,14 +60,20 @@ class SL2Decompiler(DecompilerBase):
 
         # Print the screen statement and create the block
         self.indent()
-        self.write("screen %s" % ast.name)
+        self.write(f'screen {ast.name}')
         # If we have parameters, print them.
         if ast.parameters:
             self.write(reconstruct_paraminfo(ast.parameters))
 
-        # If we're decompiling screencode, print it. Else, insert a pass statement
-        self.print_keywords_and_children(ast.keyword,
-            ast.children, ast.location[1], tag=ast.tag, atl_transform=getattr(ast, 'atl_transform', None))
+        # print contents
+        first_line, other_lines = self.sort_keywords_and_children(ast)
+
+        # apparently, screen contents are optional.
+        self.print_keyword_or_child(first_line, first_line=True, has_block=bool(other_lines))
+        if other_lines:
+            with self.increase_indent():
+                for line in other_lines:
+                    self.print_keyword_or_child(line)
 
     @dispatch(sl2.slast.SLIf)
     def print_if(self, ast):
@@ -88,28 +89,43 @@ class SL2Decompiler(DecompilerBase):
         # the first condition is named if or showif, the rest elif
         keyword = First(keyword, "elif")
         for condition, block in ast.entries:
-            block = convert_ast(block)
             self.advance_to_line(block.location[1])
             self.indent()
             # if condition is None, this is the else clause
             if condition is None:
-                self.write("else:")
+                self.write("else")
             else:
-                self.write("%s %s:" % (keyword(), condition))
+                self.write(f'{keyword()} {condition}')
 
             # Every condition has a block of type slast.SLBlock
-            if block.keyword or block.children or getattr(block, 'atl_transform', None):
-                self.print_block(block)
-            else:
-                with self.increase_indent():
-                    self.indent()
-                    self.write("pass")
+            self.print_block(block, immediate_block=True)
 
-    @dispatch(sl2.slast.SLBlock)
-    def print_block(self, ast):
-        # A block contains possible keyword arguments and a list of child nodes
-        # this is the reason if doesn't keep a list of children but special Blocks
-        self.print_keywords_and_children(ast.keyword, ast.children, None, atl_transform=getattr(ast, 'atl_transform', None))
+    def print_block(self, ast, immediate_block=False):
+        # represents an SLBlock node, which is a container of keyword arguments and children
+        #
+        # block is a child of showif, if, use, user-defined displayables.
+        # for showif, if and use, no keyword properties on the same line are allowed
+        # for custom displayables, they are allowed.
+        #
+        # immediate_block: boolean, indicates that no keyword properties are before the :, and
+        # that a block is required
+        first_line, other_lines = self.sort_keywords_and_children(
+            ast, immediate_block=immediate_block)
+
+        has_block = immediate_block or bool(other_lines)
+
+        self.print_keyword_or_child(first_line, first_line=True, has_block=has_block)
+
+        if other_lines:
+            with self.increase_indent():
+                for line in other_lines:
+                    self.print_keyword_or_child(line)
+
+            # special case, a block is forced, while there is no content
+        elif immediate_block:
+            with self.increase_indent():
+                self.indent()
+                self.write("pass")
 
     @dispatch(sl2.slast.SLFor)
     def print_for(self, ast):
@@ -125,13 +141,23 @@ class SL2Decompiler(DecompilerBase):
 
         self.indent()
         if hasattr(ast, "index_expression") and ast.index_expression is not None:
-            self.write("for %sindex %s in %s:" % (variable, ast.index_expression, ast.expression))
+            self.write(f'for {variable}index {ast.index_expression} in {ast.expression}:')
 
         else:
-            self.write("for %sin %s:" % (variable, ast.expression))
+            self.write(f'for {variable}in {ast.expression}:')
 
-        # Interestingly, for doesn't contain a block, but just a list of child nodes
+        # for doesn't contain a block, but just a list of child nodes
         self.print_nodes(children, 1)
+
+    @dispatch(sl2.slast.SLContinue)
+    def print_continue(self, ast):
+        self.indent()
+        self.write("continue")
+
+    @dispatch(sl2.slast.SLBreak)
+    def print_break(self, ast):
+        self.indent()
+        self.write("break")
 
     @dispatch(sl2.slast.SLPython)
     def print_python(self, ast):
@@ -146,7 +172,7 @@ class SL2Decompiler(DecompilerBase):
             with self.increase_indent():
                 self.write_lines(split_logical_lines(code))
         else:
-            self.write("$ %s" % code)
+            self.write(f'$ {code}')
 
     @dispatch(sl2.slast.SLPass)
     def print_pass(self, ast):
@@ -161,17 +187,17 @@ class SL2Decompiler(DecompilerBase):
         self.write("use ")
         args = reconstruct_arginfo(ast.args)
         if isinstance(ast.target, PyExpr):
-            self.write("expression %s" % ast.target)
+            self.write(f'expression {ast.target}')
             if args:
                 self.write(" pass ")
         else:
-            self.write("%s" % ast.target)
+            self.write(f'{ast.target}')
 
-        self.write("%s" % reconstruct_arginfo(ast.args))
+        self.write(f'{args}')
         if hasattr(ast, 'id') and ast.id is not None:
-            self.write(" id %s" % ast.id)
-        if hasattr(ast, 'block') and ast.block:
-            self.write(":")
+            self.write(f' id {ast.id}')
+
+        if hasattr(ast, "block") and ast.block:
             self.print_block(ast.block)
 
     @dispatch(sl2.slast.SLTransclude)
@@ -183,12 +209,7 @@ class SL2Decompiler(DecompilerBase):
     def print_default(self, ast):
         # A default statement
         self.indent()
-        self.write("default %s = %s" % (ast.variable, ast.expression))
-
-    @dispatch(sl2.slast.SLContinue)
-    def print_continue(self, ast):
-        self.indent()
-        self.write("continue")
+        self.write(f'default {ast.variable} = {ast.expression}')
 
     @dispatch(sl2.slast.SLDisplayable)
     def print_displayable(self, ast, has_block=False):
@@ -197,224 +218,378 @@ class SL2Decompiler(DecompilerBase):
         # attributes.
         key = (ast.displayable, ast.style)
         nameAndChildren = self.displayable_names.get(key)
-        if nameAndChildren is None:
-            # This is either a displayable we don't know about, or a user-defined displayable
 
-            # workaround: assume the name of the displayable matches the given style
+        if nameAndChildren is None and self.options.sl_custom_names:
+            # check if we have a name registered for this displayable
+            nameAndChildren = self.options.sl_custom_names.get(ast.displayable.__name__)
+            self.print_debug(
+                f'Substituted "{nameAndChildren[0]}" as the name for displayable {ast.displayable}')
+
+        if nameAndChildren is None:
+            # This is a (user-defined) displayable we don't know about.
+            # fallback: assume the name of the displayable matches the given style
             # this is rather often the case. However, as it may be wrong we have to
             # print a debug message
             nameAndChildren = (ast.style, 'many')
             self.print_debug(
- """Warning: Encountered a user-defined displayable of type '{}'.
+    f'''Warning: Encountered a user-defined displayable of type "{ast.displayable}".
     Unfortunately, the name of user-defined displayables is not recorded in the compiled file.
-    For now the style name '{}' will be substituted.
-    To check if this is correct, find the corresponding renpy.register_sl_displayable call.""".format(
-                    ast.displayable, ast.style
-                )
-            )
+    For now the style name "{ast.style}" will be substituted.
+    To check if this is correct, find the corresponding renpy.register_sl_displayable call.''')  # noqa
+
         (name, children) = nameAndChildren
         self.indent()
         self.write(name)
-        if ast.positional and name != 'fixed':
+        if ast.positional:
             self.write(" " + " ".join(ast.positional))
-        if hasattr(ast, 'variable'):
-            variable = ast.variable
-        else:
-            variable = None
+
         atl_transform = getattr(ast, 'atl_transform', None)
         # The AST contains no indication of whether or not "has" blocks
         # were used. We'll use one any time it's possible (except for
         # directly nesting them, or if they wouldn't contain any children),
         # since it results in cleaner code.
-        if (not has_block and children == 1 and len(ast.children) == 1 and
-            isinstance(ast.children[0], sl2.slast.SLDisplayable) and
-            ast.children[0].children and (not ast.keyword or( ast.keyword[-1][1] != None and 
-                ast.children[0].location[1] > ast.keyword[-1][1].linenumber)) and
-            (atl_transform is None or ast.children[0].location[1] > atl_transform.loc[1])):
-            self.print_keywords_and_children(ast.keyword, [],
-                ast.location[1], needs_colon=True, variable=variable, atl_transform=atl_transform)
-            self.advance_to_line(ast.children[0].location[1])
+
+        # if we're not already in a has block, and have a single child that's a displayable,
+        # which itself has children, and the line number of this child is after any atl
+        # transform or keyword we can safely use a has statement
+        if (not has_block
+                and children == 1
+                and len(ast.children) == 1
+                and isinstance(ast.children[0], sl2.slast.SLDisplayable)
+                and ast.children[0].children
+                and (not ast.keyword
+                     or ast.children[0].location[1] > ast.keyword[-1][1].linenumber)
+                and (atl_transform is None
+                     or ast.children[0].location[1] > atl_transform.loc[1])):
+
+            first_line, other_lines = self.sort_keywords_and_children(ast, ignore_children=True)
+            self.print_keyword_or_child(first_line, first_line=True, has_block=True)
+
             with self.increase_indent():
+                for line in other_lines:
+                    self.print_keyword_or_child(line)
+
+                self.advance_to_line(ast.children[0].location[1])
                 self.indent()
                 self.write("has ")
+
                 self.skip_indent_until_write = True
                 self.print_displayable(ast.children[0], True)
+
+        elif has_block:
+            # has block: for now, assume no block of any kind present
+            first_line, other_lines = self.sort_keywords_and_children(ast)
+            self.print_keyword_or_child(first_line, first_line=True, has_block=False)
+            for line in other_lines:
+                self.print_keyword_or_child(line)
+
         else:
-            self.print_keywords_and_children(ast.keyword, ast.children,
-                 ast.location[1], has_block=has_block, variable=variable, atl_transform=atl_transform)
+            first_line, other_lines = self.sort_keywords_and_children(ast)
+            self.print_keyword_or_child(first_line, first_line=True, has_block=bool(other_lines))
+
+            with self.increase_indent():
+                for line in other_lines:
+                    self.print_keyword_or_child(line)
 
     displayable_names = {
-        (behavior.OnEvent, None):               ("on", 0),
-        (behavior.OnEvent, 0):                  ("on", 0),
+        (behavior.AreaPicker, "default"):       ("areapicker", 1),
+        (behavior.Button, "button"):            ("button", 1),
+        (behavior.DismissBehavior, "default"):  ("dismiss", 0),
+        (behavior.Input, "input"):              ("input", 0),
         (behavior.MouseArea, 0):                ("mousearea", 0),
         (behavior.MouseArea, None):             ("mousearea", 0),
-        (behavior.DismissBehavior, "default"):  ("dismiss", "many"),
-        (ui._add, None):                        ("add", 0),
-        (sld.sl2add, None):                     ("add", 0),
-        (ui._hotbar, "hotbar"):                 ("hotbar", 0),
-        (sld.sl2vbar, None):                    ("vbar", 0),
-        (sld.sl2bar, None):                     ("bar", 0),
-        (ui._label, "label"):                   ("label", 0),
-        (ui._textbutton, 0):                    ("textbutton", 0),
-        (ui._textbutton, "button"):             ("textbutton", 0),
-        (ui._imagebutton, "image_button"):      ("imagebutton", 0),
-        (im.image, "default"):                  ("image", 0),
-        (behavior.Input, "input"):              ("input", 0),
+        (behavior.OnEvent, 0):                  ("on", 0),
+        (behavior.OnEvent, None):               ("on", 0),
         (behavior.Timer, "default"):            ("timer", 0),
-        (ui._key, None):                        ("key", 0),
-        (text.Text, "text"):                    ("text", 0),
-        (layout.Null, "default"):               ("null", 0),
-        (dragdrop.Drag, None):                  ("drag", 1),
         (dragdrop.Drag, "drag"):                ("drag", 1),
-        (motion.Transform, "transform"):        ("transform", 1),
-        (ui._hotspot, "hotspot"):               ("hotspot", 1),
-        (sld.sl2viewport, "viewport"):          ("viewport", 1),
-        (behavior.Button, "button"):            ("button", 1),
+        (dragdrop.Drag, None):                  ("drag", 1),
+        (dragdrop.DragGroup, None):             ("draggroup", 'many'),
+        (im.image, "default"):                  ("image", 0),
+        (layout.Grid, "grid"):                  ("grid", 'many'),
+        (layout.MultiBox, "fixed"):             ("fixed", 'many'),
+        (layout.MultiBox, "hbox"):              ("hbox", 'many'),
+        (layout.MultiBox, "vbox"):              ("vbox", 'many'),
+        (layout.NearRect, "default"):           ("nearrect", 1),
+        (layout.Null, "default"):               ("null", 0),
+        (layout.Side, "side"):                  ("side", 'many'),
         (layout.Window, "frame"):               ("frame", 1),
         (layout.Window, "window"):              ("window", 1),
-        (dragdrop.DragGroup, None):             ("draggroup", 'many'),
-        (ui._imagemap, "imagemap"):             ("imagemap", 'many'),
-        (layout.Side, "side"):                  ("side", 'many'),
-        (layout.Grid, "grid"):                  ("grid", 'many'),
+        (motion.Transform, "transform"):        ("transform", 1),
+        (sld.sl2add, None):                     ("add", 0),
+        (sld.sl2bar, None):                     ("bar", 0),
+        (sld.sl2vbar, None):                    ("vbar", 0),
+        (sld.sl2viewport, "viewport"):          ("viewport", 1),
         (sld.sl2vpgrid, "vpgrid"):              ("vpgrid", 'many'),
-        (layout.MultiBox, "fixed"):             ("fixed", 'many'),
-        (layout.MultiBox, "vbox"):              ("vbox", 'many'),
-        (layout.MultiBox, "hbox"):              ("hbox", 'many'),
-        (layout.NearRect, "default"):           ("nearrect", 0),
-        (transform.Transform, "transform"):     ("transform", 0),
-        (store.DragDropZone, "fixed"):          ("fixed", 'many'),
-        (store.MouseAnchor, "fixed"):           ("fixed", 'many'),
-        (store.DropAreaTransform, "fixed"):     ("fixed", 'many'),
-        (store.FancyText, "text"):              ("text", 0),
-        (store.DragMarker, "fixed"):            ("fixed", 'many'),
-        (store.DragState, "fixed"):             ("fixed", 'many'),
-        (store.icon.Icon, 0):                   ("Icon", 'None'),
-        (store.Hover, 'hover') :                ("hover", 1)
-
+        (text.Text, "text"):                    ("text", 0),
+        (transform.Transform, "transform"):     ("transform", 1),
+        (ui._add, None):                        ("add", 0),
+        (ui._hotbar, "hotbar"):                 ("hotbar", 0),
+        (ui._hotspot, "hotspot"):               ("hotspot", 1),
+        (ui._imagebutton, "image_button"):      ("imagebutton", 0),
+        (ui._imagemap, "imagemap"):             ("imagemap", 'many'),
+        (ui._key, None):                        ("key", 0),
+        (ui._label, "label"):                   ("label", 0),
+        (ui._textbutton, "button"):             ("textbutton", 0),
+        (ui._textbutton, 0):                    ("textbutton", 0),
     }
 
-    def print_keywords_and_children(self, keywords, children, lineno, needs_colon=False, has_block=False, tag=None, variable=None, atl_transform=None):
-        # This function prints the keyword arguments and child nodes
-        # Used in a displayable screen statement
+    def sort_keywords_and_children(self, node, immediate_block=False, ignore_children=False):
+        # sorts the contents of a SL statement that has keywords and children
+        # returns a list of sorted contents.
+        #
+        # node is either a SLDisplayable, a SLScreen or a SLBlock
+        #
+        # before this point, the name and any positional arguments of the statement have been
+        # emitted, but the block itself has not been created yet.
+        #   immediate_block: bool, if True, nothing is on the first line
+        #   ignore_children: Do not inspect children, used to implement "has" statements
 
-        # If lineno is None, we're already inside of a block.
-        # Otherwise, we're on the line that could start a block.
-        wrote_colon = False
-        keywords_by_line = []
-        current_line = (lineno, [])
-        keywords_somewhere = [] # These can go anywhere inside the block that there's room.
-        if variable is not None:
-            if current_line[0] is None:
-                keywords_somewhere.extend(("as", variable))
+        # get all the data we need from the node
+        keywords = node.keyword
+        children = [] if ignore_children else node.children
+
+        # first linenumber where we can insert content that doesn't have a clear lineno
+        block_lineno = node.location[1]
+        start_lineno = (block_lineno + 1) if immediate_block else block_lineno
+
+        # these ones are optional
+        keyword_tag = getattr(node, "tag", None)  # only used by SLScreen
+        keyword_as = getattr(node, "variable", None)  # only used by SLDisplayable
+        # all three can have it, but it is an optional property anyway
+        atl_transform = getattr(node, "atl_transform", None)
+
+        # keywords
+        # pre 7.7/8.2: keywords at the end of a line could not have an argument and the parser
+        # was okay with that.
+        keywords_by_line = [(value.linenumber if value else None,
+                             "keyword" if value else "broken",
+                             (name, value)) for name, value in keywords]
+
+        # children
+        children_by_line = [(child.location[1], "child", child) for child in children]
+
+        # now we have to determine the order of all things. Multiple keywords can go on the
+        # same line, but not children. we don't want to completely trust lineno's, even if
+        # they're utterly wrong we still should spit out a decent file also, keywords and
+        # children are supposed to be in order from the start, so we shouldn't scramble that.
+
+        # merge keywords and childrens into a single ordered list
+        # list of lineno, type, contents
+        contents_in_order = []
+        keywords_by_line.reverse()
+        children_by_line.reverse()
+        while keywords_by_line and children_by_line:
+            # broken keywords: always emit before any children, so we can merge them with the
+            # previous keywords easily
+            if keywords_by_line[-1][0] is None:
+                contents_in_order.append(keywords_by_line.pop())
+
+            elif keywords_by_line[-1][0] < children_by_line[-1][0]:
+                contents_in_order.append(keywords_by_line.pop())
+
             else:
-                current_line[1].extend(("as", variable))
-        if tag is not None:
-            if current_line[0] is None or not self.tag_outside_block:
-                keywords_somewhere.extend(("tag", tag))
-            else:
-                current_line[1].extend(("tag", tag))
+                contents_in_order.append(children_by_line.pop())
 
-        force_newline = False
-        for key, value in keywords:
-            if value is None:
-                # ok, so normally this wouldn't make sense to be None, it should be a PyExpr. However
-                # ren'py's parser is broken and instead of erroring on a keyword argument that hasn't got
-                # an actual value given it instead just inserts `None` as the value. Since basically every keyword
-                # is technically a valid expression the only way for this to happen is at the end of a line,
-                # so after this we have to force a line break
+        while keywords_by_line:
+            contents_in_order.append(keywords_by_line.pop())
 
-                # if this is the first keyword, or the previous was broken we need to force a newline
-                if current_line[0] is None or force_newline:
-                    force_newline = False
-                    keywords_by_line.append(current_line)
-                    current_line = (0, [])
+        while children_by_line:
+            contents_in_order.append(children_by_line.pop())
 
-                # force a newline
-                force_newline = True
-
-                # just output the key
-                current_line[1].append(key)
-
-            else:
-                if current_line[0] is None or value.linenumber > current_line[0] or force_newline:
-                    force_newline = False
-                    keywords_by_line.append(current_line)
-                    current_line = (value.linenumber, [])
-
-                current_line[1].extend((key, value))
-
-        if keywords_by_line:
-            if force_newline:
-                keywords_by_line.append(current_line)
-                current_line = (0, [])
-
-            # Easy case: we have at least one line inside the block that already has keywords.
-            # Just put the ones from keywords_somewhere with them.
-            current_line[1].extend(keywords_somewhere)
-            keywords_somewhere = []
-
-        keywords_by_line.append(current_line)
-
-        last_keyword_line = -1 if keywords_by_line[-1][0] is None else keywords_by_line[-1][0]
-        children_with_keywords = []
-        children_after_keywords = []
-        for i in children:
-            i = convert_ast(i)
-            if i.location[1] > last_keyword_line:
-                children_after_keywords.append(i)
-            else:
-                children_with_keywords.append((i.location[1], i))
-        # the keywords in keywords_by_line[0] go on the line that starts the
-        # block, not in it
-        block_contents = sorted(keywords_by_line[1:] + children_with_keywords,
-                                key=itemgetter(0))
-        if keywords_by_line[0][1]: # this never happens if lineno was None
-            self.write(" %s" % ' '.join(keywords_by_line[0][1]))
-        if keywords_somewhere: # this never happens if there's anything in block_contents
-            # Hard case: we need to put a keyword somewhere inside the block, but we have no idea which line to put it on.
-            if lineno is not None:
-                self.write(":")
-                wrote_colon = True
-            for index, child in enumerate(children_after_keywords):
-                if child.location[1] > self.linenumber + 1:
-                    # We have at least one blank line before the next child. Put the keywords here.
-                    with self.increase_indent():
-                        self.indent()
-                        self.write(' '.join(keywords_somewhere))
-                    self.print_nodes(children_after_keywords[index:], 0 if has_block else 1)
-                    break
-                with self.increase_indent():
-                    # Even if we're in a "has" block, we need to indent this child since there will be a keyword line after it.
-                    self.print_node(child)
-            else:
-                # No blank lines before any children, so just put the remaining keywords at the end.
-                with self.increase_indent():
-                    self.indent()
-                    self.write(' '.join(keywords_somewhere))
-        else:
-            if block_contents or (not has_block and children_after_keywords):
-                if lineno is not None:
-                    self.write(":")
-                    wrote_colon = True
-                with self.increase_indent():
-                    for i in block_contents:
-                        if isinstance(i[1], list):
-                            self.advance_to_line(i[0])
-                            self.indent()
-                            self.write(' '.join(i[1]))
-                        else:
-                            self.print_node(i[1])
-            elif needs_colon:
-                self.write(":")
-                wrote_colon = True
-            self.print_nodes(children_after_keywords, 0 if has_block else 1)
+        # merge in at transform if present
         if atl_transform is not None:
-            # "at transform:", possibly preceded by other keywords, and followed by an ATL block
-            # TODO this doesn't always go at the end. Use line numbers to figure out where it goes
-            if not wrote_colon and lineno is not None and not has_block:
-                self.write(":")
-                wrote_colon = True
-            with self.increase_indent():
-                self.indent()
-                self.write("at transform:")
-                self.linenumber = self.print_atl_callback(self.linenumber, self.indent_level, atl_transform)
+            atl_lineno = atl_transform.loc[1]
+
+            for i, (lineno, _, _) in enumerate(contents_in_order):
+                if lineno is not None and atl_lineno < lineno:
+                    index = i
+                    break
+            else:
+                index = len(contents_in_order)
+
+            contents_in_order.insert(index, (atl_lineno, "atl", atl_transform))
+
+            # TODO: double check that any atl is after any "at" keyword?
+
+        # a line can be either of the following
+        # a child
+        # a broken keyword
+        # a list of keywords, potentially followed by an atl transform
+
+        # accumulator for a line of keywords
+        current_keyword_line = None
+
+        # datastructure of (lineno, type, contents....)
+        # possible types
+        # "child"
+        # "keywords"
+        # "keywords_atl"
+        # "keywords_broken"
+        contents_grouped = []
+
+        for (lineno, ty, content) in contents_in_order:
+            if current_keyword_line is None:
+                if ty == "child":
+                    contents_grouped.append((lineno, "child", content))
+                elif ty == "keyword":
+                    current_keyword_line = (lineno, "keywords", [content])
+                elif ty == "broken":
+                    contents_grouped.append((lineno, "keywords_broken", [], content))
+                elif ty == "atl":
+                    contents_grouped.append((lineno, "keywords_atl", [], content))
+
+            else:
+                if ty == "child":
+                    contents_grouped.append(current_keyword_line)
+                    current_keyword_line = None
+                    contents_grouped.append((lineno, "child", content))
+
+                elif ty == "keyword":
+                    if current_keyword_line[0] == lineno:
+                        current_keyword_line[2].append(content)
+
+                    else:
+                        contents_grouped.append(current_keyword_line)
+                        current_keyword_line = (lineno, "keywords", [content])
+
+                elif ty == "broken":
+                    contents_grouped.append(
+                        (current_keyword_line[0], "keywords_broken",
+                         current_keyword_line[2], content))
+                    current_keyword_line = None
+
+                elif ty == "atl":
+                    if current_keyword_line[0] == lineno:
+                        contents_grouped.append(
+                            (lineno, "keywords_atl", current_keyword_line[2], content))
+                        current_keyword_line = None
+                    else:
+                        contents_grouped.append(current_keyword_line)
+                        current_keyword_line = None
+                        contents_grouped.append((lineno, "keywords_atl", [], content))
+
+        if current_keyword_line is not None:
+            contents_grouped.append(current_keyword_line)
+
+        # We need to assign linenos to any broken keywords that don't have them. Best guess
+        # is the previous lineno + 1 unless that doesn't exist, in which case it's the first
+        # available line
+        for i in range(len(contents_grouped)):
+            lineno = contents_grouped[i][0]
+            ty = contents_grouped[i][1]
+            if ty == "keywords_broken" and lineno is None:
+                contents = contents_grouped[i][3]
+
+                if i != 0:
+                    lineno = contents_grouped[i - 1][0] + 1
+                else:
+                    lineno = start_lineno
+
+                contents_grouped[i] = (lineno, "keywords_broken", [], contents)
+
+        # these two keywords have no lineno information with them
+        # additionally, since 7.3 upwards, tag cannot be placed on the same line as `screen`
+        # for whatever reason.
+        # it is currently impossible to have both an `as` and a `tag` keyword in the same
+        # displayble `as` is only used for displayables, `tag` for screens.
+        # strategies:
+        # - if there's several empty lines before any line, we can make some new lines for them
+        # - if the first line is a keyword line, we can merge them with it
+        # - for 'as', we can put it on the first line as well
+        if keyword_tag:
+            # if there's no content, we can (strangely enough) put it on the first line,
+            # because a screen without content doesn't start a block. but for sanity sake
+            # we'll put it on the first line afterwards
+            if not contents_grouped:
+                contents_grouped.append((block_lineno + 1, "keywords", [("tag", keyword_tag)]))
+
+            # or if the first line of the block is empty, put it there
+            elif contents_grouped[0][0] > block_lineno + 1:
+                contents_grouped.insert(0, (block_lineno + 1, "keywords", [("tag", keyword_tag)]))
+
+            else:
+                # try to find a line with keywords that we can merge it into
+                for entry in contents_grouped:
+                    if entry[1].startswith("keywords"):
+                        entry[2].append(("tag", keyword_tag))
+                        break
+
+                # just force it in there. this might disturb linenumbers but it's
+                # really hard to know where inbetween children it'd be safe
+                # to put it in
+                else:
+                    contents_grouped.insert(
+                        0, (block_lineno + 1, "keywords", [("tag", keyword_tag)]))
+
+        if keyword_as:
+            # if there's no content, put it on the first available line
+            if not contents_grouped:
+                contents_grouped.append((start_lineno, "keywords", [("as", keyword_as)]))
+
+            # or if the first line of the block is empty, put it there
+            elif contents_grouped[0][0] > block_lineno + 1:
+                contents_grouped.insert(0, (block_lineno + 1, "keywords", [("as", keyword_as)]))
+
+            # we can also put it on the start line if that one is available
+            elif contents_grouped[0][0] > start_lineno:
+                contents_grouped.insert(0, (start_lineno, "keywords", [("as", keyword_as)]))
+
+            else:
+                # try to find a line with keywords that we can merge it into
+                for entry in contents_grouped:
+                    if entry[1].startswith("keywords"):
+                        entry[2].append(("as", keyword_as))
+                        break
+
+                # just force it in there. this might disturb linenumbers but it's
+                # really hard to know where inbetween children it'd be safe
+                # to put it in
+                else:
+                    contents_grouped.insert(0, (start_lineno, "keywords", [("as", keyword_as)]))
+
+
+
+        # if there's no content on the first line, insert an empty line, to make processing
+        # easier.
+        if immediate_block or not contents_grouped or contents_grouped[0][0] != block_lineno:
+            contents_grouped.insert(0, (block_lineno, "keywords", []))
+
+        # return first_line_content, later_contents
+        return contents_grouped[0], contents_grouped[1:]
+
+    def print_keyword_or_child(self, item, first_line=False, has_block=False):
+        sep = First(" " if first_line else "", " ")
+
+        lineno = item[0]
+        ty = item[1]
+
+        if ty == "child":
+            self.print_node(item[2])
+            return
+
+        if not first_line:
+            self.advance_to_line(lineno)
+            self.indent()
+
+        for name, value in item[2]:
+            self.write(sep())
+            self.write(f'{name} {value}')
+
+        if ty == "keywords_atl":
+            assert not has_block, "cannot start a block on the same line as an at transform block"
+            self.write(sep())
+            self.write("at transform:")
+
+            self.linenumber = atldecompiler.pprint(
+                self.out_file, item[3], self.options,
+                self.indent_level, self.linenumber, self.skip_indent_until_write
+            )
+            self.skip_indent_until_write = False
+            return
+
+        if ty == "keywords_broken":
+            self.write(sep())
+            self.write(item[3])
+
+        if first_line and has_block:
+            self.write(":")
